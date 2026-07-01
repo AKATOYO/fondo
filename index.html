@@ -43,6 +43,7 @@
             flex-wrap: wrap;
             z-index: 10;
             height: 60px;
+            flex-shrink: 0;
         }
         h1 { margin: 0; color: var(--neon); font-size: 1.1rem; letter-spacing: 1px; display: flex; align-items: center; }
         .header-actions { display: flex; gap: 10px; align-items: center; }
@@ -112,25 +113,35 @@
         .btn-tool.btn-warning:hover { background: #e68a00; }
         .btn-tool.btn-active { background: var(--neon); color: black; }
 
+        /* SOLUCIÓN CSS: Scroll habilitado */
         .viewer { 
             position: relative; 
             background: #050505; 
             flex-grow: 1; 
+            min-height: 0; 
             display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            overflow: hidden; 
+            overflow: auto; /* Cambiado a auto para permitir scroll */
             background-image: linear-gradient(45deg, #0a0a0a 25%, transparent 25%), linear-gradient(-45deg, #0a0a0a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #0a0a0a 75%), linear-gradient(-45deg, transparent 75%, #0a0a0a 75%); 
             background-size: 20px 20px; 
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
         }
-        #canvas-wrapper { position: relative; display: none; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
-        canvas { max-width: 100%; max-height: 100%; border-radius: 4px; display: block; }
+        
+        /* margin: auto; asegura que si la imagen es pequeña, se centre, y si es grande, el scroll funcione correctamente desde la esquina superior izquierda */
+        #canvas-wrapper { 
+            position: relative; 
+            display: none; 
+            margin: auto; 
+            box-shadow: 0 0 50px rgba(0,0,0,0.5); 
+        }
+        canvas { 
+            display: block; 
+            border-radius: 4px; 
+        }
         #detections { position: absolute; top: 0; left: 0; pointer-events: none; }
         #brush-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 90; }
         #loupe { position: absolute; border: 3px solid var(--neon); border-radius: 50%; pointer-events: none; display: none; z-index: 100; box-shadow: 0 0 20px rgba(0,255,153,0.5); background: black; }
         
-        .empty-state { color: #555; text-align: center; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 40px; border-radius: 10px; }
+        .empty-state { color: #555; text-align: center; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 40px; border-radius: 10px; margin: auto; }
         .empty-state span { font-size: 3rem; display: block; margin-bottom: 10px; }
 
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
@@ -138,9 +149,9 @@
         .close-btn { color: var(--neon); float: right; font-size: 24px; cursor: pointer; }
         .modal-text { color: white; white-space: pre-wrap; font-family: monospace; background: #000; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; font-size: 12px;}
 
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: #111; }
-        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--neon); }
     </style>
 </head>
@@ -272,7 +283,6 @@
     const inputs = {};
     controlIds.forEach(id => inputs[id] = document.getElementById(id));
 
-    // Pestañas
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -285,7 +295,6 @@
     document.getElementById("close-ocr-modal").addEventListener("click", () => ocrModal.style.display = "none");
     document.getElementById("close-meta-modal").addEventListener("click", () => metaModal.style.display = "none");
 
-    // ARREGLO: Carga independiente de OpenCV y IA para evitar bloqueos
     function updateSystemStatus() {
         if (cvReady && model) statusText.textContent = "✅ IA y OpenCV Online";
         else if (cvReady) statusText.textContent = "✅ OpenCV Listo | ⏳ Cargando IA...";
@@ -302,7 +311,6 @@
             model = await cocoSsd.load();
             updateSystemStatus();
         } catch (e) { 
-            console.error("Error IA:", e);
             statusText.textContent = "❌ Error al cargar IA"; 
         }
     }
@@ -313,25 +321,40 @@
     } else {
         window.Module = { onRuntimeInitialized: onOpenCvReady };
     }
-    initAI(); // Cargar IA inmediatamente
+    initAI();
 
-    // Carga de Imagen
     document.getElementById("upload").addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const img = new Image();
         img.onload = () => {
+            const MAX_SIZE = 2500; // Límite de tamaño para evitar colguer el navegador
+            let width = img.width;
+            let height = img.height;
+
+            if (width > MAX_SIZE || height > MAX_SIZE) {
+                if (width > height) {
+                    height = Math.round((height * MAX_SIZE) / width);
+                    width = MAX_SIZE;
+                } else {
+                    width = Math.round((width * MAX_SIZE) / height);
+                    height = MAX_SIZE;
+                }
+            }
+
             originalImage = img;
-            canvas.width = dCanvas.width = brushCanvas.width = maskCanvas.width = img.width;
-            canvas.height = dCanvas.height = brushCanvas.height = maskCanvas.height = img.height;
+            canvas.width = dCanvas.width = brushCanvas.width = maskCanvas.width = width;
+            canvas.height = dCanvas.height = brushCanvas.height = maskCanvas.height = height;
             emptyState.style.display = 'none';
             canvasWrapper.style.display = 'inline-block';
             applyFilters();
+            
+            // Resetear scroll a la esquina superior izquierda
+            document.getElementById('viewer-area').scrollTo(0, 0);
         };
         img.src = URL.createObjectURL(file);
     });
 
-    // Quitar Imagen
     document.getElementById("btn-clear").addEventListener("click", () => {
         originalImage = null;
         tempImageData = null;
@@ -347,7 +370,6 @@
         statusText.textContent = "🗑️ Imagen borrada. Listo.";
     });
 
-    // Filtros
     function applyFilters() {
         if (!originalImage) return;
         ctx.filter = `
@@ -357,7 +379,7 @@
             grayscale(${inputs.grayscale.value}%)
             hue-rotate(${inputs.hueRotate.value}deg)
         `;
-        ctx.drawImage(originalImage, 0, 0);
+        ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height);
         ctx.filter = "none";
 
         let imageData = ctx.getImageData(0,0, canvas.width, canvas.height);
@@ -381,7 +403,6 @@
         }
     }
 
-    // Filtros Forenses
     document.getElementById("btn-thermal").addEventListener("click", () => {
         if (!tempImageData) return;
         let d = new Uint8ClampedArray(tempImageData.data);
@@ -419,7 +440,6 @@
         } catch (e) { console.error(e); }
     });
 
-    // Quitar Fondo
     document.getElementById("btn-remove-bg").addEventListener("click", () => {
         if (!cvReady) return alert("OpenCV cargando...");
         if (!originalImage) return;
@@ -463,7 +483,6 @@
         }, 100);
     });
 
-    // Borrador Mágico
     document.getElementById("btn-toggle-brush").addEventListener("click", (e) => {
         brushActive = !brushActive;
         if (brushActive) {
@@ -570,7 +589,6 @@
         }, 100);
     });
 
-    // Lupa
     function handleLoupe(e) {
         if (!loupeEnabled || !originalImage || brushActive) return;
         const rect = canvas.getBoundingClientRect();
@@ -596,51 +614,29 @@
         lctx.restore();
     }
 
-    // ==============================================
-    // SECCIÓN INTELIGENCIA & OCR (REPARADA)
-    // ==============================================
-
-    // 1. Detección de Objetos (IA)
     document.getElementById("btn-detect").addEventListener("click", async () => {
-        if (!model) return alert("El modelo de IA aún se está cargando, espera un momento.");
-        if (!originalImage) return;
-        
-        statusText.textContent = "⏳ Analizando imagen con IA...";
-        try {
-            const predictions = await model.detect(canvas);
-            dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
-            
-            if (predictions.length === 0) {
-                statusText.textContent = "✅ No se detectaron objetos conocidos.";
-                return;
-            }
-
-            predictions.forEach(p => {
-                dctx.strokeStyle = "#00ff99";
-                dctx.lineWidth = 4;
-                dctx.strokeRect(...p.bbox);
-                dctx.fillStyle = "#00ff99";
-                dctx.font = "bold 20px Arial";
-                const text = `${p.class.toUpperCase()} ${Math.round(p.score*100)}%`;
-                // Prevenir que el texto se salga de la pantalla si está muy arriba
-                dctx.fillText(text, p.bbox[0], p.bbox[1] > 20 ? p.bbox[1] - 5 : 20);
-            });
-            statusText.textContent = `✅ Análisis Completo (${predictions.length} objetos)`;
-        } catch (error) {
-            console.error("Error en detección:", error);
-            statusText.textContent = "❌ Error en IA";
-        }
+        if (!model) return alert("IA no cargada.");
+        statusText.textContent = "⏳ Analizando objetos...";
+        const predictions = await model.detect(canvas);
+        dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+        predictions.forEach(p => {
+            dctx.strokeStyle = "#00ff99";
+            dctx.lineWidth = 4;
+            dctx.strokeRect(...p.bbox);
+            dctx.fillStyle = "#00ff99";
+            dctx.font = "bold 20px Arial";
+            const text = `${p.class.toUpperCase()} ${Math.round(p.score*100)}%`;
+            dctx.fillText(text, p.bbox[0], p.bbox[1] > 20 ? p.bbox[1] - 5 : 20);
+        });
+        statusText.textContent = `✅ Completo (${predictions.length} objetos)`;
     });
 
-    // 2. OCR (Extraer Texto)
     document.getElementById("btn-ocr").addEventListener("click", async () => {
         if (!originalImage) return;
         statusText.textContent = "⏳ Procesando OCR...";
         ocrModal.style.display = "block";
-        ocrResult.textContent = "Iniciando motor de reconocimiento...";
+        ocrResult.textContent = "Iniciando motor...";
         
-        // ARREGLO CRÍTICO: Tesseract.js falla si el canvas tiene transparencia (fondo quitado).
-        // Se dibuja la imagen actual sobre un canvas temporal con fondo blanco sólido.
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
@@ -658,31 +654,25 @@
                     }
                 }
             });
-            ocrResult.textContent = result.data.text || "No se detectó texto en la imagen.";
+            ocrResult.textContent = result.data.text || "No se detectó texto.";
             statusText.textContent = "✅ OCR Finalizado";
         } catch (e) {
-            console.error("Error OCR:", e);
-            ocrResult.textContent = "Error durante el proceso de OCR.";
+            console.error(e);
+            ocrResult.textContent = "Error durante el OCR.";
             statusText.textContent = "❌ Error OCR";
         }
     });
 
-    // 3. Metadata EXIF
     document.getElementById("btn-meta").addEventListener("click", () => {
         const file = document.getElementById("upload").files[0];
         if (!file) return;
-        
         metaModal.style.display = "block";
         metaPre.textContent = "Leyendo metadata...";
-
-        // ARREGLO: Usar el objeto 'file' directamente en la función getAllTags para evitar pérdida de contexto.
         EXIF.getData(file, function() {
             const data = EXIF.getAllTags(file);
-            metaPre.textContent = Object.keys(data).length ? JSON.stringify(data, null, 2) : "Esta imagen no contiene metadata EXIF.";
+            metaPre.textContent = Object.keys(data).length ? JSON.stringify(data, null, 2) : "Sin metadata EXIF.";
         });
     });
-
-    // ==============================================
 
     function drawHistogram() {
         const hCanvas = document.getElementById("histogram");
@@ -701,7 +691,6 @@
         });
     }
 
-    // Listeners Globales
     controlIds.forEach(id => inputs[id].addEventListener("input", applyFilters));
     canvas.addEventListener("mousemove", handleLoupe);
     canvas.addEventListener("mouseleave", () => loupe.style.display = "none");
