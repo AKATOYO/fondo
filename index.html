@@ -113,7 +113,6 @@
         .btn-tool.btn-warning:hover { background: #e68a00; }
         .btn-tool.btn-active { background: var(--neon); color: black; }
 
-        /* SOLUCIÓN CSS: Ajuste a pantalla */
         .viewer { 
             position: relative; 
             background: #050505; 
@@ -138,8 +137,8 @@
         canvas { 
             display: block; 
             border-radius: 4px;
-            max-width: 100%; /* Evita que exceda el ancho */
-            max-height: calc(100vh - 140px); /* Calcula el alto disponible restando menús */
+            max-width: 100%; 
+            max-height: calc(100vh - 140px); 
         }
         #detections { position: absolute; top: 0; left: 0; pointer-events: none; width: 100%; height: 100%; }
         #brush-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 90; width: 100%; height: 100%; }
@@ -332,7 +331,7 @@
         if (!file) return;
         const img = new Image();
         img.onload = () => {
-            const MAX_SIZE = 2500; // Límite interno de píxeles para rendimiento
+            const MAX_SIZE = 2500; 
             let width = img.width;
             let height = img.height;
 
@@ -405,6 +404,7 @@
         }
     }
 
+    // Filtros Forenses
     document.getElementById("btn-thermal").addEventListener("click", () => {
         if (!tempImageData) return;
         let d = new Uint8ClampedArray(tempImageData.data);
@@ -442,49 +442,85 @@
         } catch (e) { console.error(e); }
     });
 
+    // =======================================================
+    // MEJORA MASIVA: Quitar Fondo (GrabCut de Alta Precisión)
+    // =======================================================
     document.getElementById("btn-remove-bg").addEventListener("click", () => {
         if (!cvReady) return alert("OpenCV cargando...");
         if (!originalImage) return;
-        statusText.textContent = "⏳ Procesando GrabCut...";
+        
+        statusText.textContent = "⏳ Analizando imagen (Precisión Mejorada)...";
+        
         setTimeout(() => {
             try {
                 let src = cv.imread(canvas);
-                let srcRGB = new cv.Mat();
-                cv.cvtColor(src, srcRGB, cv.COLOR_RGBA2RGB, 0);
-                let mask = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                let originalSize = new cv.Size(src.cols, src.rows);
+                
+                // 1. Reducir imagen para que GrabCut analice colores globales sin fallar por RAM
+                let scale = Math.min(1, 600 / Math.max(src.cols, src.rows));
+                let smallSize = new cv.Size(Math.round(src.cols * scale), Math.round(src.rows * scale));
+                let smallSrc = new cv.Mat();
+                cv.resize(src, smallSrc, smallSize, 0, 0, cv.INTER_AREA);
+                
+                let smallSrcRGB = new cv.Mat();
+                cv.cvtColor(smallSrc, smallSrcRGB, cv.COLOR_RGBA2RGB, 0);
+
+                let mask = new cv.Mat(smallSrc.rows, smallSrc.cols, cv.CV_8UC1);
                 let bgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 let fgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 
-                let marginX = Math.max(1, Math.floor(src.cols * 0.05));
-                let marginY = Math.max(1, Math.floor(src.rows * 0.05));
-                let rect = new cv.Rect(marginX, marginY, src.cols - 2 * marginX, src.rows - 2 * marginY);
+                // Rectángulo más ceñido al centro (2% margen) para mayor precisión
+                let marginX = Math.max(1, Math.floor(smallSrc.cols * 0.02));
+                let marginY = Math.max(1, Math.floor(smallSrc.rows * 0.02));
+                let rect = new cv.Rect(marginX, marginY, smallSrc.cols - 2 * marginX, smallSrc.rows - 2 * marginY);
                 
-                cv.grabCut(srcRGB, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT);
+                // 10 iteraciones para un análisis profundo
+                cv.grabCut(smallSrcRGB, mask, rect, bgdModel, fgdModel, 10, cv.GC_INIT_WITH_RECT);
                 
-                let binMask = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
-                let binMaskData = binMask.data;
-                let maskData = mask.data;
-                let size = mask.rows * mask.cols;
-                for (let i = 0; i < size; i++) {
-                    binMaskData[i] = (maskData[i] === 1 || maskData[i] === 3) ? 255 : 0;
+                // 2. Crear máscara binaria en pequeño
+                let smallBinMask = new cv.Mat(smallSrc.rows, smallSrc.cols, cv.CV_8UC1);
+                let smallMaskData = mask.data;
+                let smallBinData = smallBinMask.data;
+                let sSize = mask.rows * mask.cols;
+                for (let i = 0; i < sSize; i++) {
+                    smallBinData[i] = (smallMaskData[i] === 1 || smallMaskData[i] === 3) ? 255 : 0;
                 }
+
+                // Suavizar bordes ligeramente en pequeño para eliminar el "efecto sierra"
+                cv.GaussianBlur(smallBinMask, smallBinMask, new cv.Size(3, 3), 0);
                 
-                let dst = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(0, 0, 0, 0));
-                src.copyTo(dst, binMask);
-                cv.imshow(canvas, dst);
+                // 3. Ampliar máscara al tamaño original (Original HD)
+                let fullBinMask = new cv.Mat();
+                cv.resize(smallBinMask, fullBinMask, originalSize, 0, 0, cv.INTER_NEAREST);
                 
+                // 4. Aplicar la máscara directa al canal Alfa de la imagen original
+                let rgbaPlanes = new cv.MatVector();
+                cv.split(src, rgbaPlanes);
+                rgbaPlanes.set(3, fullBinMask); // Sustituir el canal Alfa por nuestra máscara limpia
+                
+                let finalDst = new cv.Mat();
+                cv.merge(rgbaPlanes, finalDst);
+
+                cv.imshow(canvas, finalDst);
+                
+                // Actualizar estado
                 tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 drawHistogram();
-                statusText.textContent = "✅ Fondo removido";
+                statusText.textContent = "✅ Fondo removido con alta precisión";
                 
-                src.delete(); srcRGB.delete(); mask.delete(); bgdModel.delete(); fgdModel.delete(); binMask.delete(); dst.delete();
+                // Limpieza exhaustiva de memoria
+                src.delete(); smallSrc.delete(); smallSrcRGB.delete(); mask.delete(); 
+                bgdModel.delete(); fgdModel.delete(); smallBinMask.delete(); 
+                fullBinMask.delete(); rgbaPlanes.delete(); finalDst.delete();
+                
             } catch (e) {
-                console.error(e);
-                statusText.textContent = "❌ Error GrabCut";
+                console.error("Error en GrabCut:", e);
+                statusText.textContent = "❌ Error removiendo fondo: " + e.message;
             }
         }, 100);
     });
 
+    // Borrador Mágico
     document.getElementById("btn-toggle-brush").addEventListener("click", (e) => {
         brushActive = !brushActive;
         if (brushActive) {
@@ -504,7 +540,6 @@
         mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     });
 
-    // Cálculo preciso considerando el escalado visual de la imagen
     function getMousePos(evt) {
         const rect = canvas.getBoundingClientRect();
         return {
@@ -595,7 +630,6 @@
     function handleLoupe(e) {
         if (!loupeEnabled || !originalImage || brushActive) return;
         const rect = canvas.getBoundingClientRect();
-        // Cálculo matemático preciso para la lupa respecto al escalado visual
         const x = (e.clientX - rect.left) * (canvas.width / rect.width);
         const y = (e.clientY - rect.top) * (canvas.height / rect.height);
 
