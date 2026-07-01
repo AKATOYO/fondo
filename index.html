@@ -104,6 +104,10 @@
         }
         .tool-group label { font-size: 0.7rem; color: #aaa; margin: 0; }
         .tool-group input[type=range] { width: 100%; accent-color: var(--neon); margin: 0; }
+        .tool-group select {
+            background: #2a2a2a; color: white; border: 1px solid #444;
+            padding: 6px 8px; border-radius: 4px; font-size: 0.75rem;
+        }
         
         .btn-tool {
             background: #2a2a2a; color: white; padding: 8px 12px; font-size: 0.75rem;
@@ -152,6 +156,41 @@
         .close-btn { color: var(--neon); float: right; font-size: 24px; cursor: pointer; }
         .modal-text { color: white; white-space: pre-wrap; font-family: monospace; background: #000; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; font-size: 12px;}
 
+        /* Cursor personalizado para el pincel */
+        .brush-cursor {
+            position: fixed;
+            border: 2px solid rgba(255, 50, 50, 0.9);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            display: none;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 6px rgba(255, 0, 0, 0.4);
+        }
+
+        /* Toast de notificación */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #222;
+            color: var(--neon);
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: 1px solid var(--neon);
+            font-size: 0.85rem;
+            z-index: 10000;
+            opacity: 0;
+            transition: all 0.4s ease;
+            pointer-events: none;
+            font-family: monospace;
+        }
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 5px; }
@@ -159,6 +198,12 @@
     </style>
 </head>
 <body>
+
+<!-- Cursor visual del pincel -->
+<div class="brush-cursor" id="brush-cursor"></div>
+
+<!-- Toast de notificaciones -->
+<div class="toast" id="toast"></div>
 
 <header>
     <h1>🔬 CSI FORENSIC LAB PRO</h1>
@@ -198,9 +243,24 @@
     </div>
 
     <div class="tab-content" id="tab-inpaint">
-        <p style="font-size: 0.8rem; color: #aaa; margin: 0;">Pinta sobre el objeto a eliminar y aplica el borrado mágico.</p>
+        <p style="font-size: 0.8rem; color: #aaa; margin: 0; max-width: 320px;">Pinta sobre el objeto a eliminar y aplica el borrado mágico. El algoritmo rellena con la textura del entorno.</p>
         <button id="btn-toggle-brush" class="btn-tool btn-warning">✏️ Activar Pincel</button>
-        <div class="tool-group"><label>Tamaño del Pincel</label><input type="range" id="brushSize" min="5" max="100" value="30"></div>
+        <div class="tool-group"><label>Tamaño del Pincel</label><input type="range" id="brushSize" min="5" max="150" value="30"></div>
+        <div class="tool-group">
+            <label>Método de Inpaint</label>
+            <select id="inpaintMethod">
+                <option value="telea" selected>Telea (Rápido)</option>
+                <option value="ns">Navier-Stokes (Preciso)</option>
+            </select>
+        </div>
+        <div class="tool-group">
+            <label>Pasadas de Suavizado</label>
+            <select id="inpaintPasses">
+                <option value="1">1 pasada</option>
+                <option value="2" selected>2 pasadas</option>
+                <option value="3">3 pasadas</option>
+            </select>
+        </div>
         <button id="btn-apply-inpaint" class="btn-tool btn-primary">✨ Aplicar Borrado</button>
         <button id="btn-clear-brush" class="btn-tool">🧹 Limpiar Pincel</button>
     </div>
@@ -279,13 +339,38 @@
 
     const brushCanvas = document.getElementById("brush-canvas");
     const bctx = brushCanvas.getContext("2d");
+
+    /* 
+     * CORRECCIÓN CRÍTICA: maskCanvas ahora se inserta en el DOM (oculto)
+     * para que cv.imread() funcione correctamente. Antes estaba fuera del DOM
+     * y cv.imread devolvía datos corruptos/vacíos, causando que el inpaint
+     * solo desaturara en lugar de rellenar.
+     */
     const maskCanvas = document.createElement("canvas");
-    const mctx = maskCanvas.getContext("2d");
+    maskCanvas.style.display = "none";
+    maskCanvas.style.position = "absolute";
+    maskCanvas.style.left = "-9999px";
+    document.body.appendChild(maskCanvas);
+    const mctx = maskCanvas.getContext("2d", { willReadFrequently: true });
+
+    const brushCursorEl = document.getElementById("brush-cursor");
+    const toastEl = document.getElementById("toast");
 
     const controlIds = ["brightness", "contrast", "saturate", "grayscale", "hueRotate", "sharpness"];
     const inputs = {};
     controlIds.forEach(id => inputs[id] = document.getElementById(id));
 
+    // --- Toast de notificación ---
+    let toastTimer = null;
+    function showToast(msg, duration) {
+        duration = duration || 3000;
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toastEl.classList.remove("show"), duration);
+    }
+
+    // --- Navegación por pestañas ---
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -298,6 +383,7 @@
     document.getElementById("close-ocr-modal").addEventListener("click", () => ocrModal.style.display = "none");
     document.getElementById("close-meta-modal").addEventListener("click", () => metaModal.style.display = "none");
 
+    // --- Estado del sistema ---
     function updateSystemStatus() {
         if (cvReady && model) statusText.textContent = "✅ IA y OpenCV Online";
         else if (cvReady) statusText.textContent = "✅ OpenCV Listo | ⏳ Cargando IA...";
@@ -326,6 +412,7 @@
     }
     initAI();
 
+    // --- Carga de imagen ---
     document.getElementById("upload").addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -352,15 +439,18 @@
             canvasWrapper.style.display = 'inline-block';
             applyFilters();
             document.getElementById('viewer-area').scrollTo(0, 0);
+            showToast("Imagen cargada: " + width + "x" + height);
         };
         img.src = URL.createObjectURL(file);
     });
 
+    // --- Quitar imagen ---
     document.getElementById("btn-clear").addEventListener("click", () => {
         originalImage = null;
         tempImageData = null;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         bctx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
+        mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
         dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
         document.getElementById("upload").value = "";
         canvasWrapper.style.display = 'none';
@@ -369,8 +459,10 @@
         const hCanvas = document.getElementById("histogram");
         hCanvas.getContext("2d").clearRect(0, 0, hCanvas.width, hCanvas.height);
         statusText.textContent = "🗑️ Imagen borrada. Listo.";
+        if (brushActive) document.getElementById("btn-toggle-brush").click();
     });
 
+    // --- Filtros de ajuste ---
     function applyFilters() {
         if (!originalImage) return;
         ctx.filter = `
@@ -404,7 +496,7 @@
         }
     }
 
-    // Filtros Forenses
+    // --- Filtros Forenses ---
     document.getElementById("btn-thermal").addEventListener("click", () => {
         if (!tempImageData) return;
         let d = new Uint8ClampedArray(tempImageData.data);
@@ -442,9 +534,7 @@
         } catch (e) { console.error(e); }
     });
 
-    // =======================================================
-    // MEJORA MASIVA: Quitar Fondo (GrabCut de Alta Precisión)
-    // =======================================================
+    // --- Quitar Fondo (GrabCut) ---
     document.getElementById("btn-remove-bg").addEventListener("click", () => {
         if (!cvReady) return alert("OpenCV cargando...");
         if (!originalImage) return;
@@ -456,7 +546,6 @@
                 let src = cv.imread(canvas);
                 let originalSize = new cv.Size(src.cols, src.rows);
                 
-                // 1. Reducir imagen para que GrabCut analice colores globales sin fallar por RAM
                 let scale = Math.min(1, 600 / Math.max(src.cols, src.rows));
                 let smallSize = new cv.Size(Math.round(src.cols * scale), Math.round(src.rows * scale));
                 let smallSrc = new cv.Mat();
@@ -469,15 +558,12 @@
                 let bgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 let fgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 
-                // Rectángulo más ceñido al centro (2% margen) para mayor precisión
                 let marginX = Math.max(1, Math.floor(smallSrc.cols * 0.02));
                 let marginY = Math.max(1, Math.floor(smallSrc.rows * 0.02));
                 let rect = new cv.Rect(marginX, marginY, smallSrc.cols - 2 * marginX, smallSrc.rows - 2 * marginY);
                 
-                // 10 iteraciones para un análisis profundo
                 cv.grabCut(smallSrcRGB, mask, rect, bgdModel, fgdModel, 10, cv.GC_INIT_WITH_RECT);
                 
-                // 2. Crear máscara binaria en pequeño
                 let smallBinMask = new cv.Mat(smallSrc.rows, smallSrc.cols, cv.CV_8UC1);
                 let smallMaskData = mask.data;
                 let smallBinData = smallBinMask.data;
@@ -486,29 +572,24 @@
                     smallBinData[i] = (smallMaskData[i] === 1 || smallMaskData[i] === 3) ? 255 : 0;
                 }
 
-                // Suavizar bordes ligeramente en pequeño para eliminar el "efecto sierra"
                 cv.GaussianBlur(smallBinMask, smallBinMask, new cv.Size(3, 3), 0);
                 
-                // 3. Ampliar máscara al tamaño original (Original HD)
                 let fullBinMask = new cv.Mat();
                 cv.resize(smallBinMask, fullBinMask, originalSize, 0, 0, cv.INTER_NEAREST);
                 
-                // 4. Aplicar la máscara directa al canal Alfa de la imagen original
                 let rgbaPlanes = new cv.MatVector();
                 cv.split(src, rgbaPlanes);
-                rgbaPlanes.set(3, fullBinMask); // Sustituir el canal Alfa por nuestra máscara limpia
+                rgbaPlanes.set(3, fullBinMask);
                 
                 let finalDst = new cv.Mat();
                 cv.merge(rgbaPlanes, finalDst);
 
                 cv.imshow(canvas, finalDst);
                 
-                // Actualizar estado
                 tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 drawHistogram();
                 statusText.textContent = "✅ Fondo removido con alta precisión";
                 
-                // Limpieza exhaustiva de memoria
                 src.delete(); smallSrc.delete(); smallSrcRGB.delete(); mask.delete(); 
                 bgdModel.delete(); fgdModel.delete(); smallBinMask.delete(); 
                 fullBinMask.delete(); rgbaPlanes.delete(); finalDst.delete();
@@ -520,26 +601,40 @@
         }, 100);
     });
 
-    // Borrador Mágico
+    // ================================================================
+    // BORRADOR MÁGICO — CORREGIDO COMPLETAMENTE
+    // ================================================================
+    // Problemas originales:
+    // 1. cv.imread(maskCanvas) fallaba con canvas fuera del DOM → máscara corrupta
+    // 2. Radio de inpaint fijo en 3 → insuficiente para cualquier pincel real
+    // 3. Sin dilatación de máscara → bordes del objeto visible quedaban sin corregir
+    // 4. Sin validación de máscara vacía → errores silenciosos
+    // ================================================================
+
     document.getElementById("btn-toggle-brush").addEventListener("click", (e) => {
         brushActive = !brushActive;
         if (brushActive) {
             e.target.classList.add("btn-active");
             e.target.textContent = "🚫 Desactivar Pincel";
-            canvas.style.cursor = "crosshair";
+            canvas.style.cursor = "none";
+            brushCursorEl.style.display = "block";
             if (loupeEnabled) document.getElementById("toggleLoupe").click();
+            showToast("Pincel activado — pinta sobre lo que quieras eliminar");
         } else {
             e.target.classList.remove("btn-active");
             e.target.textContent = "✏️ Activar Pincel";
             canvas.style.cursor = "default";
+            brushCursorEl.style.display = "none";
         }
     });
 
     document.getElementById("btn-clear-brush").addEventListener("click", () => {
         bctx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
         mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        showToast("Pincel limpiado");
     });
 
+    // --- Conversión de coordenadas mouse → canvas ---
     function getMousePos(evt) {
         const rect = canvas.getBoundingClientRect();
         return {
@@ -548,85 +643,251 @@
         };
     }
 
+    // --- Eventos de dibujado con pincel (mouse) ---
     canvas.addEventListener("mousedown", (e) => {
         if (!brushActive) return;
         isDrawing = true;
         drawBrush(e);
     });
-
     canvas.addEventListener("mousemove", (e) => {
+        // Actualizar cursor visual del pincel
+        if (brushActive) {
+            const size = parseInt(document.getElementById("brushSize").value);
+            const rect = canvas.getBoundingClientRect();
+            const displaySize = size * (rect.width / canvas.width);
+            brushCursorEl.style.width = displaySize + "px";
+            brushCursorEl.style.height = displaySize + "px";
+            brushCursorEl.style.left = e.clientX + "px";
+            brushCursorEl.style.top = e.clientY + "px";
+        }
         if (!brushActive || !isDrawing) return;
         drawBrush(e);
     });
-
     canvas.addEventListener("mouseup", () => isDrawing = false);
-    canvas.addEventListener("mouseleave", () => isDrawing = false);
+    canvas.addEventListener("mouseleave", () => {
+        isDrawing = false;
+        if (brushActive) brushCursorEl.style.display = "none";
+    });
+    canvas.addEventListener("mouseenter", () => {
+        if (brushActive) brushCursorEl.style.display = "block";
+    });
+
+    // --- Soporte táctil para el pincel ---
+    canvas.addEventListener("touchstart", (e) => {
+        if (!brushActive) return;
+        e.preventDefault();
+        isDrawing = true;
+        drawBrushTouch(e);
+    }, { passive: false });
+    canvas.addEventListener("touchmove", (e) => {
+        if (!brushActive || !isDrawing) return;
+        e.preventDefault();
+        drawBrushTouch(e);
+    }, { passive: false });
+    canvas.addEventListener("touchend", () => isDrawing = false);
+
+    function getTouchPos(evt) {
+        const touch = evt.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (touch.clientX - rect.left) * (canvas.width / rect.width),
+            y: (touch.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    function drawBrushTouch(e) {
+        const pos = getTouchPos(e);
+        paintBrushStroke(pos.x, pos.y);
+    }
 
     function drawBrush(e) {
         if (!isDrawing) return;
         const pos = getMousePos(e);
+        paintBrushStroke(pos.x, pos.y);
+    }
+
+    // Dibuja simultáneamente en el canvas visual (rojo) y en la máscara (blanco)
+    function paintBrushStroke(x, y) {
         const size = parseInt(document.getElementById("brushSize").value);
         const halfSize = size / 2;
 
-        bctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+        // Visual: trazo rojo semi-transparente para que el usuario vea qué selecciona
+        bctx.fillStyle = "rgba(255, 40, 40, 0.45)";
         bctx.beginPath();
-        bctx.arc(pos.x, pos.y, halfSize, 0, Math.PI * 2);
+        bctx.arc(x, y, halfSize, 0, Math.PI * 2);
         bctx.fill();
 
+        // Máscara: blanco puro sobre fondo negro — esto es lo que usa OpenCV
         mctx.fillStyle = "white";
         mctx.beginPath();
-        mctx.arc(pos.x, pos.y, halfSize, 0, Math.PI * 2);
+        mctx.arc(x, y, halfSize, 0, Math.PI * 2);
         mctx.fill();
     }
 
+    // ================================================================
+    // INPAINT CORREGIDO — El núcleo de la reparación
+    // ================================================================
     document.getElementById("btn-apply-inpaint").addEventListener("click", () => {
-        if (!cvReady) return alert("OpenCV cargando...");
-        if (!originalImage) return;
-        statusText.textContent = "⏳ Eliminando selección...";
+        if (!cvReady) return showToast("❌ OpenCV aún cargando...", 3000);
+        if (!originalImage) return showToast("❌ No hay imagen cargada", 3000);
+
+        statusText.textContent = "⏳ Preparando máscara...";
+        
         setTimeout(() => {
             try {
+                // -------------------------------------------------------
+                // PASO 1: Construir la máscara directamente desde píxeles
+                // En lugar de cv.imread(maskCanvas) que falla con canvases
+                // fuera del DOM, leemos los píxeles con getImageData y
+                // construimos el Mat manualmente.
+                // -------------------------------------------------------
+                const maskPixelData = mctx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+                const maskMat = new cv.Mat(maskCanvas.height, maskCanvas.width, cv.CV_8UC1);
+                const maskPtr = maskMat.data;
+                
+                let pixelCount = 0;
+                const totalPixels = maskCanvas.width * maskCanvas.height;
+                
+                for (let i = 0; i < totalPixels; i++) {
+                    const r = maskPixelData.data[i * 4];     // Canal rojo
+                    const a = maskPixelData.data[i * 4 + 3]; // Canal alfa
+                    // Si hay pintura blanca (rojo=255, alfa=255), marcar como máscara
+                    const isMasked = (r > 100 && a > 100);
+                    maskPtr[i] = isMasked ? 255 : 0;
+                    if (isMasked) pixelCount++;
+                }
+
+                // Validar que haya algo seleccionado
+                if (pixelCount < 10) {
+                    maskMat.delete();
+                    showToast("❌ No hay área seleccionada. Pinta con el pincel primero.", 4000);
+                    statusText.textContent = "❌ Sin selección para inpaint";
+                    return;
+                }
+
+                statusText.textContent = "⏳ Eliminando objeto... (" + pixelCount + " píxeles)";
+
+                // -------------------------------------------------------
+                // PASO 2: Dilatar la máscara para cubrir los bordes
+                // Sin dilatación, los bordes del objeto marcado quedan
+                // visibles porque el pincel no cubre perfectamente.
+                // -------------------------------------------------------
+                const kernelSize = Math.max(3, Math.ceil(parseInt(document.getElementById("brushSize").value) / 4));
+                const ksize = kernelSize % 2 === 0 ? kernelSize + 1 : kernelSize; //Debe ser impar
+                const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(ksize, ksize));
+                const dilatedMask = new cv.Mat();
+                cv.dilate(maskMat, dilatedMask, kernel);
+                kernel.delete();
+                maskMat.delete();
+
+                // -------------------------------------------------------
+                // PASO 3: Leer la imagen actual y convertir a RGB
+                // -------------------------------------------------------
                 let src = cv.imread(canvas);
                 let srcRGB = new cv.Mat();
                 cv.cvtColor(src, srcRGB, cv.COLOR_RGBA2RGB);
 
-                let mask = cv.imread(maskCanvas);
-                let maskGray = new cv.Mat();
-                cv.cvtColor(mask, maskGray, cv.COLOR_RGBA2GRAY);
-                let binaryMask = new cv.Mat();
-                cv.threshold(maskGray, binaryMask, 10, 255, cv.THRESH_BINARY);
+                // -------------------------------------------------------
+                // PASO 4: Calcular el radio de inpaint dinámicamente
+                // Antes estaba fijado en 3 (insuficiente). Ahora se basa
+                // en el tamaño del pincel: mínimo 5, ideal ~60% del pincel.
+                // Un radio demasiado pequeño produce el efecto "quita color"
+                // porque no hay suficiente contexto para interpolar.
+                // -------------------------------------------------------
+                const brushSize = parseInt(document.getElementById("brushSize").value);
+                const inpaintRadius = Math.max(5, Math.ceil(brushSize * 0.6));
 
+                // -------------------------------------------------------
+                // PASO 5: Seleccionar método de inpaint
+                // -------------------------------------------------------
+                const methodStr = document.getElementById("inpaintMethod").value;
+                const inpaintMethod = (methodStr === "ns") ? cv.INPAINT_NS : cv.INPAINT_TELEA;
+
+                // -------------------------------------------------------
+                // PASO 6: Aplicar inpaint (posiblemente múltiples pasadas)
+                // Múltiples pasadas con radio decreciente mejoran el
+                // relleno de áreas grandes, reduciendo artefactos.
+                // -------------------------------------------------------
+                const passes = parseInt(document.getElementById("inpaintPasses").value);
+                let currentSrc = srcRGB;
+                let currentMask = dilatedMask;
                 let dst = new cv.Mat();
-                cv.inpaint(srcRGB, binaryMask, dst, 3, cv.INPAINT_TELEA);
 
+                for (let p = 0; p < passes; p++) {
+                    const passRadius = Math.max(3, Math.ceil(inpaintRadius * (1 - p * 0.3)));
+                    const tempDst = new cv.Mat();
+                    cv.inpaint(currentSrc, currentMask, tempDst, passRadius, inpaintMethod);
+                    
+                    if (p < passes - 1) {
+                        // En pasadas intermedias, reducimos la máscara para solo
+                        // corregir las zonas que aún tienen artefactos
+                        const diff = new cv.Mat();
+                        cv.absdiff(currentSrc, tempDst, diff);
+                        const diffGray = new cv.Mat();
+                        cv.cvtColor(diff, diffGray, cv.COLOR_RGB2GRAY);
+                        const newMask = new cv.Mat();
+                        cv.threshold(diffGray, newMask, 5, 255, cv.THRESH_BINARY);
+                        
+                        currentSrc.delete();
+                        currentMask.delete();
+                        diff.delete();
+                        diffGray.delete();
+                        
+                        currentSrc = tempDst;
+                        currentMask = newMask;
+                    } else {
+                        dst = tempDst;
+                    }
+                }
+                
+                currentSrc.delete();
+                currentMask.delete();
+
+                // -------------------------------------------------------
+                // PASO 7: Convertir resultado a RGBA y preservar canal alfa
+                // -------------------------------------------------------
                 let dstRGBA = new cv.Mat();
                 cv.cvtColor(dst, dstRGBA, cv.COLOR_RGB2RGBA);
 
-                let rgbaPlanes = new cv.MatVector();
-                cv.split(src, rgbaPlanes);
-                let alpha = rgbaPlanes.get(3);
+                let srcPlanes = new cv.MatVector();
+                cv.split(src, srcPlanes);
+                let alphaChannel = srcPlanes.get(3);
+
                 let dstPlanes = new cv.MatVector();
                 cv.split(dstRGBA, dstPlanes);
-                dstPlanes.set(3, alpha);
+                dstPlanes.set(3, alphaChannel);
+
                 let finalDst = new cv.Mat();
                 cv.merge(dstPlanes, finalDst);
 
+                // -------------------------------------------------------
+                // PASO 8: Mostrar resultado y limpiar
+                // -------------------------------------------------------
                 cv.imshow(canvas, finalDst);
                 tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Limpiar pinceles
                 bctx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
                 mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                
                 drawHistogram();
-                statusText.textContent = "✅ Objeto eliminado";
+                statusText.textContent = "✅ Objeto eliminado (radio:" + inpaintRadius + ", " + passes + " pasadas)";
+                showToast("✅ Objeto eliminado correctamente", 3000);
 
-                src.delete(); srcRGB.delete(); mask.delete(); maskGray.delete(); 
-                binaryMask.delete(); dst.delete(); dstRGBA.delete(); 
-                rgbaPlanes.delete(); dstPlanes.delete(); finalDst.delete();
+                // Limpieza exhaustiva de memoria OpenCV
+                src.delete(); srcRGB.delete(); dilatedMask.delete();
+                dst.delete(); dstRGBA.delete();
+                srcPlanes.delete(); dstPlanes.delete(); finalDst.delete();
+
             } catch (err) {
-                console.error(err);
-                statusText.textContent = "❌ Error Inpaint";
+                console.error("Error en Inpaint:", err);
+                statusText.textContent = "❌ Error Inpaint: " + err.message;
+                showToast("❌ Error: " + err.message, 5000);
             }
-        }, 100);
+        }, 150);
     });
 
+    // --- Lupa ---
     function handleLoupe(e) {
         if (!loupeEnabled || !originalImage || brushActive) return;
         const rect = canvas.getBoundingClientRect();
@@ -652,6 +913,7 @@
         lctx.restore();
     }
 
+    // --- Detección de objetos con IA ---
     document.getElementById("btn-detect").addEventListener("click", async () => {
         if (!model) return alert("IA no cargada.");
         statusText.textContent = "⏳ Analizando objetos...";
@@ -669,6 +931,7 @@
         statusText.textContent = `✅ Completo (${predictions.length} objetos)`;
     });
 
+    // --- OCR ---
     document.getElementById("btn-ocr").addEventListener("click", async () => {
         if (!originalImage) return;
         statusText.textContent = "⏳ Procesando OCR...";
@@ -701,6 +964,7 @@
         }
     });
 
+    // --- Metadata EXIF ---
     document.getElementById("btn-meta").addEventListener("click", () => {
         const file = document.getElementById("upload").files[0];
         if (!file) return;
@@ -712,9 +976,11 @@
         });
     });
 
+    // --- Histograma ---
     function drawHistogram() {
         const hCanvas = document.getElementById("histogram");
         const hctx = hCanvas.getContext("2d");
+        if (!tempImageData) return;
         const data = tempImageData.data;
         let hist = new Array(256).fill(0);
         for (let i = 0; i < data.length; i += 4) {
@@ -722,6 +988,7 @@
         }
         hctx.clearRect(0,0, hCanvas.width, hCanvas.height);
         let max = Math.max(...hist);
+        if (max === 0) return;
         hctx.fillStyle = "#00ff99";
         hist.forEach((v, i) => {
             let h = (v/max) * hCanvas.height;
@@ -729,9 +996,12 @@
         });
     }
 
+    // --- Eventos de controles ---
     controlIds.forEach(id => inputs[id].addEventListener("input", applyFilters));
     canvas.addEventListener("mousemove", handleLoupe);
-    canvas.addEventListener("mouseleave", () => loupe.style.display = "none");
+    canvas.addEventListener("mouseleave", () => {
+        loupe.style.display = "none";
+    });
 
     document.getElementById("toggleLoupe").addEventListener("click", (e) => {
         loupeEnabled = !loupeEnabled;
