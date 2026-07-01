@@ -433,8 +433,8 @@
                 let bgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 let fgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 
-                let marginX = Math.max(1, Math.floor(src.cols * 0.03));
-                let marginY = Math.max(1, Math.floor(src.rows * 0.03));
+                let marginX = Math.max(1, Math.floor(src.cols * 0.05));
+                let marginY = Math.max(1, Math.floor(src.rows * 0.05));
                 let rect = new cv.Rect(marginX, marginY, src.cols - 2 * marginX, src.rows - 2 * marginY);
                 
                 cv.grabCut(srcRGB, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT);
