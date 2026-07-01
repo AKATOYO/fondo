@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSI Forensic Lab Pro - Análisis de Imágenes</title>
     <meta name="description" content="Suite de análisis forense de imágenes con OpenCV, TensorFlow y OCR.">
 
@@ -21,19 +21,18 @@
             --border: #333;
             --header-bg: #111;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { box-sizing: border-box; }
         body { 
+            margin: 0; 
             font-family: 'Segoe UI', Roboto, sans-serif; 
             background: var(--bg); 
             color: white; 
             height: 100vh; 
-            height: 100dvh;
             display: flex;
             flex-direction: column;
-            overflow: hidden; 
+            overflow-y: scroll; 
         }
         
-        /* ===== HEADER ===== */
         header { 
             padding: 10px 20px; 
             background: var(--header-bg); 
@@ -43,25 +42,15 @@
             align-items: center; 
             flex-wrap: wrap;
             z-index: 10;
-            flex-shrink: 0;
-            gap: 8px;
+            height: 60px;
         }
-        h1 { 
-            color: var(--neon); 
-            font-size: 1.1rem; 
-            letter-spacing: 1px; 
-            display: flex; 
-            align-items: center;
-            white-space: nowrap;
-        }
-        .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        h1 { margin: 0; color: var(--neon); font-size: 1.1rem; letter-spacing: 1px; display: flex; align-items: center; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
         
         .custom-file-upload {
             border: 1px solid var(--neon); color: var(--neon);
             padding: 8px 15px; border-radius: 6px; cursor: pointer;
             font-weight: bold; font-size: 0.8rem; transition: 0.2s;
-            display: inline-flex; align-items: center; gap: 4px;
-            white-space: nowrap;
         }
         .custom-file-upload:hover { background: var(--neon); color: black; }
         input[type=file] { display: none; }
@@ -70,15 +59,12 @@
             border: none; border-radius: 6px; cursor: pointer; 
             font-weight: bold; transition: 0.2s; font-size: 0.8rem; 
             padding: 8px 15px;
-            white-space: nowrap;
-            touch-action: manipulation;
         }
         .btn-danger { background: #cc3300; color: white; }
         .btn-danger:hover { background: #aa2200; }
         .btn-primary { background: var(--neon); color: black; }
         .btn-primary:hover { background: #00cc77; }
 
-        /* ===== TOOLBAR / TABS ===== */
         .toolbar {
             background: var(--header-bg);
             border-bottom: 2px solid var(--border);
@@ -91,14 +77,10 @@
             padding: 0 20px;
             border-bottom: 1px solid #222;
             overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
         }
-        .tab-nav::-webkit-scrollbar { display: none; }
         .tab-btn {
             background: transparent; color: #888; padding: 12px 20px;
             border-bottom: 2px solid transparent; margin-bottom: -1px;
-            flex-shrink: 0;
         }
         .tab-btn:hover { color: white; }
         .tab-btn.active { color: var(--neon); border-bottom-color: var(--neon); }
@@ -119,8 +101,8 @@
             gap: 5px;
             min-width: 120px;
         }
-        .tool-group label { font-size: 0.7rem; color: #aaa; }
-        .tool-group input[type=range] { width: 100%; accent-color: var(--neon); }
+        .tool-group label { font-size: 0.7rem; color: #aaa; margin: 0; }
+        .tool-group input[type=range] { width: 100%; accent-color: var(--neon); margin: 0; }
         
         .btn-tool {
             background: #2a2a2a; color: white; padding: 8px 12px; font-size: 0.75rem;
@@ -130,7 +112,6 @@
         .btn-tool.btn-warning:hover { background: #e68a00; }
         .btn-tool.btn-active { background: var(--neon); color: black; }
 
-        /* ===== VIEWER ===== */
         .viewer { 
             position: relative; 
             background: #050505; 
@@ -142,203 +123,25 @@
             background-image: linear-gradient(45deg, #0a0a0a 25%, transparent 25%), linear-gradient(-45deg, #0a0a0a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #0a0a0a 75%), linear-gradient(-45deg, transparent 75%, #0a0a0a 75%); 
             background-size: 20px 20px; 
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
-            min-height: 0;
         }
-        #canvas-wrapper { 
-            position: relative; 
-            display: none; 
-            box-shadow: 0 0 50px rgba(0,0,0,0.5); 
-            max-width: 100%; 
-            max-height: 100%;
-            line-height: 0;
-            will-change: transform;
-            transform-origin: 0 0;
-        }
+        #canvas-wrapper { position: relative; display: none; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
         canvas { max-width: 100%; max-height: 100%; border-radius: 4px; display: block; }
         #detections { position: absolute; top: 0; left: 0; pointer-events: none; }
         #brush-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 90; }
         #loupe { position: absolute; border: 3px solid var(--neon); border-radius: 50%; pointer-events: none; display: none; z-index: 100; box-shadow: 0 0 20px rgba(0,255,153,0.5); background: black; }
         
-        .empty-state { 
-            color: #555; text-align: center; font-size: 1.2rem; 
-            background: rgba(0,0,0,0.5); padding: 40px; border-radius: 10px;
-            max-width: 90%;
-        }
+        .empty-state { color: #555; text-align: center; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 40px; border-radius: 10px; }
         .empty-state span { font-size: 3rem; display: block; margin-bottom: 10px; }
 
-        /* ===== INDICADOR DE ZOOM ===== */
-        .zoom-indicator {
-            position: absolute;
-            bottom: 12px;
-            right: 12px;
-            background: rgba(0,0,0,0.85);
-            border: 1px solid #444;
-            color: var(--neon);
-            font-family: 'Courier New', monospace;
-            font-size: 0.8rem;
-            font-weight: bold;
-            padding: 6px 12px;
-            border-radius: 6px;
-            z-index: 50;
-            pointer-events: none;
-            backdrop-filter: blur(4px);
-            letter-spacing: 0.5px;
-        }
-
-        /* ===== MODALES ===== */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); overflow-y: auto; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
         .modal-content { background: var(--panel); margin: 8% auto; padding: 20px; border: 1px solid var(--neon); border-radius: 10px; width: 80%; max-width: 600px; }
-        .close-btn { color: var(--neon); float: right; font-size: 24px; cursor: pointer; line-height: 1; }
-        .close-btn:hover { color: white; }
+        .close-btn { color: var(--neon); float: right; font-size: 24px; cursor: pointer; }
         .modal-text { color: white; white-space: pre-wrap; font-family: monospace; background: #000; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; font-size: 12px;}
 
-        /* ===== SCROLLBAR ===== */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #111; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--neon); }
-
-        /* ===== INSTRUCCIONES TÁCTILES ===== */
-        .touch-hint {
-            display: none;
-            font-size: 0.7rem;
-            color: #888;
-            text-align: center;
-            padding: 4px 10px;
-            background: #0d0d0d;
-            border-bottom: 1px solid #222;
-            flex-shrink: 0;
-        }
-
-        /* ===================================================
-           RESPONSIVE — TABLET (hasta 900px)
-           =================================================== */
-        @media (max-width: 900px) {
-            header { padding: 8px 14px; }
-            h1 { font-size: 0.95rem; }
-            #status { font-size: 10px; }
-            .tab-btn { padding: 10px 14px; font-size: 0.75rem; }
-            .tool-group { min-width: 100px; }
-        }
-
-        /* ===================================================
-           RESPONSIVE — MÓVIL (hasta 640px)
-           =================================================== */
-        @media (max-width: 640px) {
-            body {
-                height: auto;
-                min-height: 100vh;
-                min-height: 100dvh;
-                overflow-y: auto;
-            }
-
-            header {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 8px;
-                padding: 10px 12px;
-            }
-            h1 { 
-                font-size: 0.85rem; 
-                justify-content: center; 
-            }
-            #status { display: none; }
-            .header-actions {
-                justify-content: center;
-                gap: 6px;
-            }
-            .custom-file-upload, 
-            .header-actions button {
-                font-size: 0.7rem;
-                padding: 7px 10px;
-            }
-
-            .tab-nav { padding: 0 8px; }
-            .tab-btn { 
-                padding: 9px 10px; 
-                font-size: 0.65rem; 
-            }
-
-            .tab-content { 
-                padding: 10px 10px; 
-                gap: 8px; 
-            }
-            .tool-group { 
-                min-width: 0; 
-                flex: 1 1 70px; 
-            }
-            .tool-group label { font-size: 0.6rem; }
-            .tool-group input[type=range] { min-width: 50px; }
-            .btn-tool { 
-                font-size: 0.65rem; 
-                padding: 7px 8px; 
-            }
-            .tab-content p { 
-                font-size: 0.7rem !important; 
-                width: 100%; 
-            }
-
-            .viewer { 
-                min-height: 45vh;
-                min-height: 45dvh;
-            }
-
-            .touch-hint { display: block; }
-
-            #histogram {
-                width: 100% !important;
-                max-width: 200px;
-                height: auto !important;
-            }
-
-            .modal-content { 
-                width: 95%; 
-                margin: 5% auto; 
-                padding: 15px; 
-            }
-            .modal-text { 
-                font-size: 11px; 
-                max-height: 50vh; 
-            }
-            .modal-content h2 { font-size: 1rem; }
-
-            #loupe { display: none !important; }
-            .zoom-indicator { font-size: 0.7rem; padding: 4px 8px; bottom: 8px; right: 8px; }
-        }
-
-        /* ===================================================
-           RESPONSIVE — MÓVIL PEQUEÑO (hasta 380px)
-           =================================================== */
-        @media (max-width: 380px) {
-            h1 { font-size: 0.75rem; letter-spacing: 0; }
-            .tab-btn { padding: 7px 7px; font-size: 0.58rem; }
-            .header-actions { gap: 4px; }
-            .custom-file-upload, 
-            .header-actions button {
-                font-size: 0.62rem;
-                padding: 6px 7px;
-            }
-            .btn-tool { font-size: 0.6rem; padding: 6px 6px; }
-            .empty-state { font-size: 0.9rem; padding: 25px 15px; }
-            .empty-state span { font-size: 2rem; }
-        }
-
-        /* ===================================================
-           LANDSCAPE EN MÓVIL
-           =================================================== */
-        @media (max-height: 500px) and (orientation: landscape) {
-            header { padding: 4px 12px; flex-direction: row; }
-            h1 { font-size: 0.8rem; }
-            .custom-file-upload, 
-            .header-actions button { 
-                font-size: 0.65rem; 
-                padding: 4px 8px; 
-            }
-            .tab-btn { padding: 6px 10px; font-size: 0.65rem; }
-            .tab-content { padding: 6px 10px; gap: 6px; }
-            .tool-group { flex: 1 1 60px; }
-            .viewer { min-height: 200px; }
-        }
     </style>
 </head>
 <body>
@@ -347,7 +150,7 @@
     <h1>🔬 CSI FORENSIC LAB PRO</h1>
     <div class="header-actions">
         <div id="status" style="font-size: 12px; font-family: monospace; color: var(--neon); margin-right: 10px;">⏳ Cargando...</div>
-        <label for="upload" class="custom-file-upload">📁 Cargar</label>
+        <label for="upload" class="custom-file-upload">📁 Cargar Imagen</label>
         <input type="file" id="upload" accept="image/*">
         <button id="btn-clear" class="btn-danger">🗑️ Quitar</button>
         <button id="download" class="btn-primary">💾 Guardar</button>
@@ -357,10 +160,10 @@
 <nav class="toolbar">
     <div class="tab-nav">
         <button class="tab-btn active" data-tab="adjust">🎨 Ajustes</button>
-        <button class="tab-btn" data-tab="forensic">🔍 Forenses</button>
-        <button class="tab-btn" data-tab="inpaint">✨ Borrador</button>
-        <button class="tab-btn" data-tab="ai">🧠 IA & OCR</button>
-        <button class="tab-btn" data-tab="view">🔬 Visor</button>
+        <button class="tab-btn" data-tab="forensic">🔍 Filtros Forenses</button>
+        <button class="tab-btn" data-tab="inpaint">✨ Borrador Mágico</button>
+        <button class="tab-btn" data-tab="ai">🧠 Inteligencia & OCR</button>
+        <button class="tab-btn" data-tab="view">🔬 Visor & Lupa</button>
     </div>
 
     <div class="tab-content active" id="tab-adjust">
@@ -374,42 +177,36 @@
     </div>
 
     <div class="tab-content" id="tab-forensic">
-        <button id="btn-thermal" class="btn-tool">🔥 Térmica</button>
-        <button id="btn-night" class="btn-tool">🌙 Nocturna</button>
-        <button id="btn-canny" class="btn-tool">📐 Canny Edge</button>
-        <button id="btn-remove-bg" class="btn-tool btn-warning">✂️ Quitar Fondo</button>
+        <button id="btn-thermal" class="btn-tool">🔥 Visión Térmica</button>
+        <button id="btn-night" class="btn-tool">🌙 Visión Nocturna</button>
+        <button id="btn-canny" class="btn-tool">📐 Canny Edge (OpenCV)</button>
+        <button id="btn-remove-bg" class="btn-tool btn-warning">✂️ Quitar Fondo (GrabCut)</button>
     </div>
 
     <div class="tab-content" id="tab-inpaint">
-        <p style="font-size: 0.8rem; color: #aaa;">Pinta sobre el objeto a eliminar y aplica el borrado.</p>
+        <p style="font-size: 0.8rem; color: #aaa; margin: 0;">Pinta sobre el objeto a eliminar y aplica el borrado mágico.</p>
         <button id="btn-toggle-brush" class="btn-tool btn-warning">✏️ Activar Pincel</button>
-        <div class="tool-group"><label>Tamaño Pincel</label><input type="range" id="brushSize" min="5" max="100" value="30"></div>
+        <div class="tool-group"><label>Tamaño del Pincel</label><input type="range" id="brushSize" min="5" max="100" value="30"></div>
         <button id="btn-apply-inpaint" class="btn-tool btn-primary">✨ Aplicar Borrado</button>
-        <button id="btn-clear-brush" class="btn-tool">🧹 Limpiar</button>
+        <button id="btn-clear-brush" class="btn-tool">🧹 Limpiar Pincel</button>
     </div>
 
     <div class="tab-content" id="tab-ai">
-        <button id="btn-detect" class="btn-tool">🤖 Detección IA</button>
-        <button id="btn-ocr" class="btn-tool">📝 Extraer Texto</button>
-        <button id="btn-meta" class="btn-tool">📂 Metadata EXIF</button>
+        <button id="btn-detect" class="btn-tool">🤖 Detección Objetos (IA)</button>
+        <button id="btn-ocr" class="btn-tool">📝 Extraer Texto (OCR)</button>
+        <button id="btn-meta" class="btn-tool">📂 Ver Metadata EXIF</button>
     </div>
 
     <div class="tab-content" id="tab-view">
-        <button id="toggleLoupe" class="btn-tool btn-active">🔍 Lupa ON/OFF</button>
+        <button id="toggleLoupe" class="btn-tool btn-active">Lupa: ON/OFF</button>
         <div class="tool-group"><label>Zoom Lupa</label><input type="range" id="lZoom" min="2" max="20" value="8"></div>
-        <div class="tool-group"><label>Tamaño Lupa</label><input type="range" id="lSize" min="100" max="600" value="300"></div>
-        <button id="btn-fit-screen" class="btn-tool">📐 Ajustar Pantalla</button>
-        <button id="btn-zoom-100" class="btn-tool">🔲 100%</button>
-        <button id="btn-zoom-reset" class="btn-tool">↩️ Reset Vista</button>
+        <div class="tool-group"><label>Tamaño Lupa</label><input type="range" id="lSize" min="200" max="600" value="300"></div>
         <div class="tool-group">
             <label>Histograma</label>
             <canvas id="histogram" width="200" height="60" style="background: black; border-radius: 4px;"></canvas>
         </div>
     </div>
 </nav>
-
-<!-- Hint visible solo en móvil -->
-<div class="touch-hint" id="touch-hint">Pestañas: desliza · Zoom: pellizca · Mover: 2 dedos</div>
 
 <main class="viewer" id="viewer-area">
     <div class="empty-state" id="empty-state">
@@ -422,7 +219,6 @@
         <canvas id="detections"></canvas>
         <canvas id="loupe"></canvas>
     </div>
-    <div class="zoom-indicator" id="zoom-indicator" style="display:none;">100%</div>
 </main>
 
 <div id="ocr-modal" class="modal">
@@ -452,9 +248,6 @@
     let brushActive = false;
     let isDrawing = false;
 
-    /* Detección de dispositivo táctil */
-    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const dCanvas = document.getElementById("detections");
@@ -464,8 +257,6 @@
     const statusText = document.getElementById("status");
     const emptyState = document.getElementById("empty-state");
     const canvasWrapper = document.getElementById("canvas-wrapper");
-    const viewerArea = document.getElementById("viewer-area");
-    const zoomIndicator = document.getElementById("zoom-indicator");
     
     const ocrModal = document.getElementById("ocr-modal");
     const ocrResult = document.getElementById("ocr-result");
@@ -481,202 +272,7 @@
     const inputs = {};
     controlIds.forEach(id => inputs[id] = document.getElementById(id));
 
-    /* =============================================================
-       SISTEMA DE ZOOM Y PANEAMIENTO
-       ============================================================= */
-    let zoomLevel = 1;
-    let panX = 0;
-    let panY = 0;
-    let isPanning = false;
-    let panStartX = 0;
-    let panStartY = 0;
-
-    const MIN_ZOOM = 0.05;
-    const MAX_ZOOM = 30;
-
-    /* Aplica la transformación CSS al contenedor del canvas */
-    function updateViewerTransform() {
-        canvasWrapper.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
-        if (zoomIndicator) {
-            zoomIndicator.textContent = `${Math.round(zoomLevel * 100)}%`;
-        }
-    }
-
-    /* Reiniciar zoom y posición al centro */
-    function resetView() {
-        zoomLevel = 1;
-        panX = 0;
-        panY = 0;
-        updateViewerTransform();
-    }
-
-    /* Ajustar la imagen completa al visor */
-    function fitToScreen() {
-        if (!originalImage) return;
-        const rect = viewerArea.getBoundingClientRect();
-        const padding = 20;
-        const availW = rect.width - padding * 2;
-        const availH = rect.height - padding * 2;
-        
-        /* Calcular el tamaño natural que tomaría el canvas sin zoom */
-        const naturalW = canvas.width;
-        const naturalH = canvas.height;
-        const fitScale = Math.min(availW / naturalW, availH / naturalH, 1);
-        
-        zoomLevel = fitScale;
-        panX = (rect.width - naturalW * zoomLevel) / 2;
-        panY = (rect.height - naturalH * zoomLevel) / 2;
-        updateViewerTransform();
-    }
-
-    /* --- ZOOM CON CTRL + RUEDA (Desktop) --- */
-    viewerArea.addEventListener('wheel', (e) => {
-        if (!e.ctrlKey && !e.metaKey) return;
-        e.preventDefault();
-
-        if (!originalImage) return;
-
-        const rect = viewerArea.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        /* Coordenadas del punto bajo el cursor ANTES del zoom */
-        const beforeX = (mouseX - panX) / zoomLevel;
-        const beforeY = (mouseY - panY) / zoomLevel;
-
-        /* Calcular nuevo nivel de zoom */
-        const factor = e.deltaY > 0 ? 0.9 : 1.1;
-        zoomLevel = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel * factor));
-
-        /* Coordenadas del mismo punto DESPUÉS del zoom */
-        const afterX = (mouseX - panX) / zoomLevel;
-        const afterY = (mouseY - panY) / zoomLevel;
-
-        /* Ajustar paneo para que el punto bajo el cursor no se mueva */
-        panX += (afterX - beforeX) * zoomLevel;
-        panY += (afterY - beforeY) * zoomLevel;
-
-        updateViewerTransform();
-    }, { passive: false });
-
-    /* --- PANEAMIENTO CON RATÓN (Botón central o Ctrl+Click) --- */
-    viewerArea.addEventListener('mousedown', (e) => {
-        /* Solo paneo si: botón central, o Ctrl+clic izquierdo sin pincel activo */
-        if (e.button === 1 || (e.button === 0 && (e.ctrlKey || e.metaKey) && !brushActive)) {
-            isPanning = true;
-            panStartX = e.clientX - panX;
-            panStartY = e.clientY - panY;
-            viewerArea.style.cursor = 'grabbing';
-            e.preventDefault();
-        }
-    });
-
-    window.addEventListener('mousemove', (e) => {
-        if (!isPanning) return;
-        panX = e.clientX - panStartX;
-        panY = e.clientY - panStartY;
-        updateViewerTransform();
-    });
-
-    window.addEventListener('mouseup', (e) => {
-        if (isPanning) {
-            isPanning = false;
-            viewerArea.style.cursor = '';
-        }
-    });
-
-    /* --- PINCH-TO-ZOOM Y PANEAMIENTO CON 2 DEDOS (Móvil) --- */
-    let pinchStartDist = 0;
-    let pinchStartZoom = 1;
-    let pinchStartPanX = 0;
-    let pinchStartPanY = 0;
-    let pinchStartCenterX = 0;
-    let pinchStartCenterY = 0;
-    let isTwoFingerTouch = false;
-
-    viewerArea.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2 && originalImage) {
-            isTwoFingerTouch = true;
-            e.preventDefault();
-
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            pinchStartDist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-            pinchStartZoom = zoomLevel;
-            pinchStartPanX = panX;
-            pinchStartPanY = panY;
-            pinchStartCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-            pinchStartCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        }
-    }, { passive: false });
-
-    viewerArea.addEventListener('touchmove', (e) => {
-        if (!isTwoFingerTouch || e.touches.length < 2) return;
-        e.preventDefault();
-
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy));
-        const scale = dist / pinchStartDist;
-
-        /* Centro actual de los dos dedos */
-        const rect = viewerArea.getBoundingClientRect();
-        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-
-        /* Movimiento de paneo (arrastrar con 2 dedos) */
-        const dragX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - pinchStartCenterX;
-        const dragY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - pinchStartCenterY;
-
-        /* Nuevo zoom */
-        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinchStartZoom * scale));
-
-        /* Zoom hacia el centro del pinch */
-        const beforeX = (cx - pinchStartPanX) / pinchStartZoom;
-        const beforeY = (cy - pinchStartPanY) / pinchStartZoom;
-
-        zoomLevel = newZoom;
-        panX = cx - beforeX * zoomLevel + dragX;
-        panY = cy - beforeY * zoomLevel + dragY;
-
-        updateViewerTransform();
-    }, { passive: false });
-
-    viewerArea.addEventListener('touchend', (e) => {
-        if (e.touches.length < 2) {
-            isTwoFingerTouch = false;
-        }
-    });
-
-    viewerArea.addEventListener('touchcancel', () => {
-        isTwoFingerTouch = false;
-    });
-
-    /* Botones del panel Visor */
-    document.getElementById("btn-fit-screen").addEventListener("click", fitToScreen);
-    document.getElementById("btn-zoom-100").addEventListener("click", () => {
-        if (!originalImage) return;
-        /* Centrar la imagen al 100% */
-        const rect = viewerArea.getBoundingClientRect();
-        zoomLevel = 1;
-        panX = (rect.width - canvas.width) / 2;
-        panY = (rect.height - canvas.height) / 2;
-        updateViewerTransform();
-    });
-    document.getElementById("btn-zoom-reset").addEventListener("click", resetView);
-
-    /* =============================================================
-       FIN SISTEMA DE ZOOM
-       ============================================================= */
-
-    /* Si es táctil, desactivar lupa por defecto */
-    if (isTouchDevice) {
-        loupeEnabled = false;
-        const loupeBtn = document.getElementById("toggleLoupe");
-        if (loupeBtn) loupeBtn.classList.remove("btn-active");
-    }
-
-    /* ===== PESTAÑAS ===== */
+    // Pestañas
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -689,18 +285,11 @@
     document.getElementById("close-ocr-modal").addEventListener("click", () => ocrModal.style.display = "none");
     document.getElementById("close-meta-modal").addEventListener("click", () => metaModal.style.display = "none");
 
-    /* Cerrar modales al tocar fuera */
-    [ocrModal, metaModal].forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) modal.style.display = 'none';
-        });
-    });
-
-    /* ===== CARGA DE OpenCV e IA ===== */
+    // ARREGLO: Carga independiente de OpenCV y IA para evitar bloqueos
     function updateSystemStatus() {
         if (cvReady && model) statusText.textContent = "✅ IA y OpenCV Online";
-        else if (cvReady) statusText.textContent = "✅ OpenCV | ⏳ IA...";
-        else if (model) statusText.textContent = "✅ IA | ⏳ OpenCV...";
+        else if (cvReady) statusText.textContent = "✅ OpenCV Listo | ⏳ Cargando IA...";
+        else if (model) statusText.textContent = "✅ IA Lista | ⏳ Cargando OpenCV...";
     }
 
     function onOpenCvReady() {
@@ -714,7 +303,7 @@
             updateSystemStatus();
         } catch (e) { 
             console.error("Error IA:", e);
-            statusText.textContent = "❌ Error IA"; 
+            statusText.textContent = "❌ Error al cargar IA"; 
         }
     }
 
@@ -724,9 +313,9 @@
     } else {
         window.Module = { onRuntimeInitialized: onOpenCvReady };
     }
-    initAI();
+    initAI(); // Cargar IA inmediatamente
 
-    /* ===== CARGA DE IMAGEN ===== */
+    // Carga de Imagen
     document.getElementById("upload").addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -737,18 +326,12 @@
             canvas.height = dCanvas.height = brushCanvas.height = maskCanvas.height = img.height;
             emptyState.style.display = 'none';
             canvasWrapper.style.display = 'inline-block';
-            zoomIndicator.style.display = 'block';
-            
-            /* Resetear vista y ajustar al cargar */
-            resetView();
-            fitToScreen();
-            
             applyFilters();
         };
         img.src = URL.createObjectURL(file);
     });
 
-    /* Quitar Imagen */
+    // Quitar Imagen
     document.getElementById("btn-clear").addEventListener("click", () => {
         originalImage = null;
         tempImageData = null;
@@ -757,16 +340,14 @@
         dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
         document.getElementById("upload").value = "";
         canvasWrapper.style.display = 'none';
-        zoomIndicator.style.display = 'none';
         emptyState.style.display = 'block';
         controlIds.forEach(id => inputs[id].value = 0);
         const hCanvas = document.getElementById("histogram");
         hCanvas.getContext("2d").clearRect(0, 0, hCanvas.width, hCanvas.height);
-        resetView();
         statusText.textContent = "🗑️ Imagen borrada. Listo.";
     });
 
-    /* ===== FILTROS ===== */
+    // Filtros
     function applyFilters() {
         if (!originalImage) return;
         ctx.filter = `
@@ -800,7 +381,7 @@
         }
     }
 
-    /* ===== FILTROS FORENSES ===== */
+    // Filtros Forenses
     document.getElementById("btn-thermal").addEventListener("click", () => {
         if (!tempImageData) return;
         let d = new Uint8ClampedArray(tempImageData.data);
@@ -838,127 +419,62 @@
         } catch (e) { console.error(e); }
     });
 
-    /* ==================================================================
-       QUITAR FONDO PRECISO (GrabCut Avanzado + Morfología + Feathering)
-       ================================================================== */
+    // Quitar Fondo
     document.getElementById("btn-remove-bg").addEventListener("click", () => {
-        if (!cvReady) return alert("OpenCV está cargando, espera un momento...");
-        if (!originalImage) return alert("Primero carga una imagen.");
-        
-        statusText.textContent = "⏳ Generando máscara precisa de fondo...";
-        
+        if (!cvReady) return alert("OpenCV cargando...");
+        if (!originalImage) return;
+        statusText.textContent = "⏳ Procesando GrabCut...";
         setTimeout(() => {
             try {
                 let src = cv.imread(canvas);
                 let srcRGB = new cv.Mat();
                 cv.cvtColor(src, srcRGB, cv.COLOR_RGBA2RGB, 0);
+                let mask = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                let bgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
+                let fgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
                 
-                let mask = new cv.Mat();
-                let bgdModel = new cv.Mat();
-                let fgdModel = new cv.Mat();
+                let marginX = Math.max(1, Math.floor(src.cols * 0.05));
+                let marginY = Math.max(1, Math.floor(src.rows * 0.05));
+                let rect = new cv.Rect(marginX, marginY, src.cols - 2 * marginX, src.rows - 2 * marginY);
                 
-                let marginX = Math.max(2, Math.floor(src.cols * 0.02));
-                let marginY = Math.max(2, Math.floor(src.rows * 0.02));
-                let rect1 = new cv.Rect(marginX, marginY, src.cols - 2 * marginX, src.rows - 2 * marginY);
+                cv.grabCut(srcRGB, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT);
                 
-                cv.grabCut(srcRGB, mask, rect1, bgdModel, fgdModel, 3, cv.GC_INIT_WITH_RECT);
-                
-                let tempBinMask1 = new cv.Mat();
-                tempBinMask1.create(mask.rows, mask.cols, cv.CV_8UC1);
-                let tempMaskData1 = tempBinMask1.data;
-                for (let i = 0; i < tempMaskData1.length; i++) {
-                    tempMaskData1[i] = (mask.data[i] === 1 || mask.data[i] === 3) ? 255 : 0;
+                let binMask = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                let binMaskData = binMask.data;
+                let maskData = mask.data;
+                let size = mask.rows * mask.cols;
+                for (let i = 0; i < size; i++) {
+                    binMaskData[i] = (maskData[i] === 1 || maskData[i] === 3) ? 255 : 0;
                 }
                 
-                let kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5));
-                let dilatedMask = new cv.Mat();
-                cv.dilate(tempBinMask1, dilatedMask, kernel);
-                
-                let refinedMask = new cv.Mat();
-                refinedMask.create(mask.rows, mask.cols, cv.CV_8UC1);
-                let refinedData = refinedMask.data;
-                for (let i = 0; i < refinedData.length; i++) {
-                    if (dilatedMask.data[i] === 0) {
-                        refinedData[i] = cv.GC_BGD;
-                    } else {
-                        refinedData[i] = mask.data[i];
-                    }
-                }
-                
-                let bgdModel2 = new cv.Mat();
-                let fgdModel2 = new cv.Mat();
-                cv.grabCut(srcRGB, refinedMask, new cv.Rect(), bgdModel2, fgdModel2, 5, cv.GC_INIT_WITH_MASK);
-                
-                let finalBinMask = new cv.Mat();
-                finalBinMask.create(refinedMask.rows, refinedMask.cols, cv.CV_8UC1);
-                let finalData = finalBinMask.data;
-                for (let i = 0; i < finalData.length; i++) {
-                    finalData[i] = (refinedMask.data[i] === 1 || refinedMask.data[i] === 3) ? 255 : 0;
-                }
-                
-                let closedMask = new cv.Mat();
-                let kernelClose = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(7, 7));
-                cv.morphologyEx(finalBinMask, closedMask, cv.MORPH_CLOSE, kernelClose);
-                
-                let openedMask = new cv.Mat();
-                let kernelOpen = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(5, 5));
-                cv.morphologyEx(closedMask, openedMask, cv.MORPH_OPEN, kernelOpen);
-                
-                let featheredMask = new cv.Mat();
-                let featherRadius = Math.max(1, Math.floor(Math.min(src.cols, src.rows) * 0.005));
-                cv.GaussianBlur(openedMask, featheredMask, new cv.Size(0, 0), featherRadius);
-                
-                let alphaMask = new cv.Mat();
-                alphaMask.create(featheredMask.rows, featheredMask.cols, cv.CV_8UC1);
-                let alphaData = alphaMask.data;
-                for (let i = 0; i < alphaData.length; i++) {
-                    alphaData[i] = Math.min(255, Math.max(0, featheredMask.data[i] * 2));
-                }
-                
-                let dst = new cv.Mat(src.rows, src.cols, cv.CV_8UC4);
-                let srcPlanes = new cv.MatVector();
-                cv.split(src, srcPlanes);
-                let dstPlanes = new cv.MatVector();
-                dstPlanes.push_back(srcPlanes.get(0));
-                dstPlanes.push_back(srcPlanes.get(1));
-                dstPlanes.push_back(srcPlanes.get(2));
-                dstPlanes.push_back(alphaMask);
-                cv.merge(dstPlanes, dst);
-                
+                let dst = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(0, 0, 0, 0));
+                src.copyTo(dst, binMask);
                 cv.imshow(canvas, dst);
+                
                 tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 drawHistogram();
-                statusText.textContent = "✅ Fondo eliminado con precisión";
+                statusText.textContent = "✅ Fondo removido";
                 
-                src.delete(); srcRGB.delete(); mask.delete(); bgdModel.delete(); fgdModel.delete();
-                tempBinMask1.delete(); dilatedMask.delete(); refinedMask.delete();
-                bgdModel2.delete(); fgdModel2.delete();
-                finalBinMask.delete(); closedMask.delete(); openedMask.delete();
-                featheredMask.delete(); alphaMask.delete();
-                dst.delete(); srcPlanes.delete(); dstPlanes.delete();
-                kernel.delete(); kernelClose.delete(); kernelOpen.delete();
-                
+                src.delete(); srcRGB.delete(); mask.delete(); bgdModel.delete(); fgdModel.delete(); binMask.delete(); dst.delete();
             } catch (e) {
-                console.error("Error en GrabCut Avanzado:", e);
-                statusText.textContent = "❌ Error al procesar fondo";
+                console.error(e);
+                statusText.textContent = "❌ Error GrabCut";
             }
         }, 100);
     });
 
-    /* ===== BORRADOR MÁGICO ===== */
+    // Borrador Mágico
     document.getElementById("btn-toggle-brush").addEventListener("click", (e) => {
         brushActive = !brushActive;
         if (brushActive) {
             e.target.classList.add("btn-active");
-            e.target.textContent = "🚫 Desactivar";
+            e.target.textContent = "🚫 Desactivar Pincel";
             canvas.style.cursor = "crosshair";
-            canvas.style.touchAction = 'none';
             if (loupeEnabled) document.getElementById("toggleLoupe").click();
         } else {
             e.target.classList.remove("btn-active");
             e.target.textContent = "✏️ Activar Pincel";
             canvas.style.cursor = "default";
-            canvas.style.touchAction = 'auto';
         }
     });
 
@@ -967,17 +483,31 @@
         mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     });
 
-    /* Conversión de coordenadas: funciona correctamente con zoom porque
-       getBoundingClientRect() devuelve las dimensiones reales renderizadas */
-    function getCanvasPos(clientX, clientY) {
+    function getMousePos(evt) {
         const rect = canvas.getBoundingClientRect();
         return {
-            x: (clientX - rect.left) * (canvas.width / rect.width),
-            y: (clientY - rect.top) * (canvas.height / rect.height)
+            x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+            y: (evt.clientY - rect.top) * (canvas.height / rect.height)
         };
     }
 
-    function paintBrush(pos) {
+    canvas.addEventListener("mousedown", (e) => {
+        if (!brushActive) return;
+        isDrawing = true;
+        drawBrush(e);
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+        if (!brushActive || !isDrawing) return;
+        drawBrush(e);
+    });
+
+    canvas.addEventListener("mouseup", () => isDrawing = false);
+    canvas.addEventListener("mouseleave", () => isDrawing = false);
+
+    function drawBrush(e) {
+        if (!isDrawing) return;
+        const pos = getMousePos(e);
         const size = parseInt(document.getElementById("brushSize").value);
         const halfSize = size / 2;
 
@@ -992,41 +522,6 @@
         mctx.fill();
     }
 
-    /* --- Eventos de RATÓN para pincel --- */
-    canvas.addEventListener("mousedown", (e) => {
-        if (!brushActive || isPanning) return;
-        isDrawing = true;
-        paintBrush(getCanvasPos(e.clientX, e.clientY));
-    });
-    canvas.addEventListener("mousemove", (e) => {
-        if (!brushActive || !isDrawing || isPanning) return;
-        paintBrush(getCanvasPos(e.clientX, e.clientY));
-    });
-    canvas.addEventListener("mouseup", () => isDrawing = false);
-    canvas.addEventListener("mouseleave", () => isDrawing = false);
-
-    /* --- Eventos TÁCTILES para pincel (solo 1 dedo, sin pinch) --- */
-    canvas.addEventListener("touchstart", (e) => {
-        if (!brushActive || e.touches.length > 1 || isTwoFingerTouch) return;
-        e.preventDefault();
-        isDrawing = true;
-        const t = e.touches[0];
-        paintBrush(getCanvasPos(t.clientX, t.clientY));
-    }, { passive: false });
-
-    canvas.addEventListener("touchmove", (e) => {
-        if (!brushActive || !isDrawing || e.touches.length > 1 || isTwoFingerTouch) return;
-        e.preventDefault();
-        const t = e.touches[0];
-        paintBrush(getCanvasPos(t.clientX, t.clientY));
-    }, { passive: false });
-
-    canvas.addEventListener("touchend", (e) => {
-        if (e.touches.length === 0) isDrawing = false;
-    });
-    canvas.addEventListener("touchcancel", () => isDrawing = false);
-
-    /* Aplicar Inpaint */
     document.getElementById("btn-apply-inpaint").addEventListener("click", () => {
         if (!cvReady) return alert("OpenCV cargando...");
         if (!originalImage) return;
@@ -1075,9 +570,9 @@
         }, 100);
     });
 
-    /* ===== LUPA (solo ratón, sin zoom activo) ===== */
-    function handleLoupe(e) => {
-        if (!loupeEnabled || !originalImage || brushActive || isTouchDevice || zoomLevel !== 1) return;
+    // Lupa
+    function handleLoupe(e) {
+        if (!loupeEnabled || !originalImage || brushActive) return;
         const rect = canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (canvas.width / rect.width);
         const y = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -1101,58 +596,51 @@
         lctx.restore();
     }
 
-    canvas.addEventListener("mousemove", handleLoupe);
-    canvas.addEventListener("mouseleave", () => loupe.style.display = "none");
+    // ==============================================
+    // SECCIÓN INTELIGENCIA & OCR (REPARADA)
+    // ==============================================
 
-    document.getElementById("toggleLoupe").addEventListener("click", (e) => {
-        loupeEnabled = !loupeEnabled;
-        e.target.classList.toggle("btn-active");
-        if(!loupeEnabled) loupe.style.display = "none";
-    });
-
-    /* ===== IA & OCR ===== */
+    // 1. Detección de Objetos (IA)
     document.getElementById("btn-detect").addEventListener("click", async () => {
-        if (!model) return alert("El modelo de IA aún se está cargando.");
+        if (!model) return alert("El modelo de IA aún se está cargando, espera un momento.");
         if (!originalImage) return;
         
-        statusText.textContent = "⏳ Analizando con IA...";
+        statusText.textContent = "⏳ Analizando imagen con IA...";
         try {
             const predictions = await model.detect(canvas);
             dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
             
             if (predictions.length === 0) {
-                statusText.textContent = "✅ No se detectaron objetos.";
+                statusText.textContent = "✅ No se detectaron objetos conocidos.";
                 return;
             }
 
-            const displayScale = canvas.getBoundingClientRect().width / canvas.width;
-            const lineWidth = Math.max(2, Math.round(4 * displayScale));
-            const fontSize = Math.max(12, Math.round(20 * displayScale));
-
             predictions.forEach(p => {
                 dctx.strokeStyle = "#00ff99";
-                dctx.lineWidth = lineWidth;
+                dctx.lineWidth = 4;
                 dctx.strokeRect(...p.bbox);
                 dctx.fillStyle = "#00ff99";
-                dctx.font = `bold ${fontSize}px Arial`;
+                dctx.font = "bold 20px Arial";
                 const text = `${p.class.toUpperCase()} ${Math.round(p.score*100)}%`;
-                const textY = p.bbox[1] > fontSize + 5 ? p.bbox[1] - 5 : fontSize + 5;
-                dctx.fillText(text, p.bbox[0], textY);
+                // Prevenir que el texto se salga de la pantalla si está muy arriba
+                dctx.fillText(text, p.bbox[0], p.bbox[1] > 20 ? p.bbox[1] - 5 : 20);
             });
-            statusText.textContent = `✅ ${predictions.length} objetos detectados`;
+            statusText.textContent = `✅ Análisis Completo (${predictions.length} objetos)`;
         } catch (error) {
-            console.error("Error IA:", error);
+            console.error("Error en detección:", error);
             statusText.textContent = "❌ Error en IA";
         }
     });
 
-    /* OCR */
+    // 2. OCR (Extraer Texto)
     document.getElementById("btn-ocr").addEventListener("click", async () => {
         if (!originalImage) return;
         statusText.textContent = "⏳ Procesando OCR...";
         ocrModal.style.display = "block";
         ocrResult.textContent = "Iniciando motor de reconocimiento...";
         
+        // ARREGLO CRÍTICO: Tesseract.js falla si el canvas tiene transparencia (fondo quitado).
+        // Se dibuja la imagen actual sobre un canvas temporal con fondo blanco sólido.
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
@@ -1165,22 +653,21 @@
             const result = await Tesseract.recognize(tempCanvas, 'spa+eng', {
                 logger: m => {
                     if (m.status === 'recognizing text') {
-                        const pct = Math.round(m.progress * 100);
-                        ocrResult.textContent = `Reconociendo texto... ${pct}%`;
-                        statusText.textContent = `⏳ OCR: ${pct}%`;
+                        ocrResult.textContent = `Reconociendo texto... ${Math.round(m.progress * 100)}%`;
+                        statusText.textContent = `⏳ OCR: ${Math.round(m.progress * 100)}%`;
                     }
                 }
             });
-            ocrResult.textContent = result.data.text || "No se detectó texto.";
+            ocrResult.textContent = result.data.text || "No se detectó texto en la imagen.";
             statusText.textContent = "✅ OCR Finalizado";
         } catch (e) {
             console.error("Error OCR:", e);
-            ocrResult.textContent = "Error durante el OCR.";
+            ocrResult.textContent = "Error durante el proceso de OCR.";
             statusText.textContent = "❌ Error OCR";
         }
     });
 
-    /* Metadata EXIF */
+    // 3. Metadata EXIF
     document.getElementById("btn-meta").addEventListener("click", () => {
         const file = document.getElementById("upload").files[0];
         if (!file) return;
@@ -1188,34 +675,42 @@
         metaModal.style.display = "block";
         metaPre.textContent = "Leyendo metadata...";
 
+        // ARREGLO: Usar el objeto 'file' directamente en la función getAllTags para evitar pérdida de contexto.
         EXIF.getData(file, function() {
             const data = EXIF.getAllTags(file);
-            metaPre.textContent = Object.keys(data).length ? JSON.stringify(data, null, 2) : "No contiene metadata EXIF.";
+            metaPre.textContent = Object.keys(data).length ? JSON.stringify(data, null, 2) : "Esta imagen no contiene metadata EXIF.";
         });
     });
 
-    /* ===== HISTOGRAMA ===== */
+    // ==============================================
+
     function drawHistogram() {
         const hCanvas = document.getElementById("histogram");
         const hctx = hCanvas.getContext("2d");
-        if (!tempImageData) return;
         const data = tempImageData.data;
         let hist = new Array(256).fill(0);
         for (let i = 0; i < data.length; i += 4) {
             hist[Math.floor((data[i] + data[i+1] + data[i+2]) / 3)]++;
         }
-        hctx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+        hctx.clearRect(0,0, hCanvas.width, hCanvas.height);
         let max = Math.max(...hist);
         hctx.fillStyle = "#00ff99";
-        const barW = hCanvas.width / 256;
         hist.forEach((v, i) => {
-            let h = (v / max) * hCanvas.height;
-            hctx.fillRect(i * barW, hCanvas.height - h, Math.max(1, barW), h);
+            let h = (v/max) * hCanvas.height;
+            hctx.fillRect(i * (hCanvas.width/256), hCanvas.height - h, 1, h);
         });
     }
 
-    /* ===== LISTENERS GLOBALES ===== */
+    // Listeners Globales
     controlIds.forEach(id => inputs[id].addEventListener("input", applyFilters));
+    canvas.addEventListener("mousemove", handleLoupe);
+    canvas.addEventListener("mouseleave", () => loupe.style.display = "none");
+
+    document.getElementById("toggleLoupe").addEventListener("click", (e) => {
+        loupeEnabled = !loupeEnabled;
+        e.target.classList.toggle("btn-active");
+        if(!loupeEnabled) loupe.style.display = "none";
+    });
 
     document.getElementById("reset").addEventListener("click", () => {
         controlIds.forEach(id => inputs[id].value = 0);
