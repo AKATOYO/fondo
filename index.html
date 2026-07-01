@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSI Forensic Lab Pro - Análisis de Imágenes</title>
+    <meta name="description" content="Suite de análisis forense de imágenes con OpenCV, TensorFlow y OCR.">
+
+    <!-- Librerías Externas -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.15.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js@2.3.0/exif.js"></script>
+
+    <style>
+        :root { 
+            --neon: #00ff99; 
+            --bg: #0b0b0b; 
+            --panel: #181818; 
+            --border: #333;
+            --header-bg: #111;
+        }
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; 
+            font-family: 'Segoe UI', Roboto, sans-serif; 
+            background: var(--bg); 
+            color: white; 
+            height: 100vh; 
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; 
+        }
+        
+        header { 
+            padding: 10px 20px; 
+            background: var(--header-bg); 
+            border-bottom: 1px solid var(--border); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            flex-wrap: wrap;
+            z-index: 10;
+            height: 60px;
+        }
+        h1 { margin: 0; color: var(--neon); font-size: 1.1rem; letter-spacing: 1px; display: flex; align-items: center; }
+        .header-actions { display: flex; gap: 10px; align-items: center; }
+        
+        .custom-file-upload {
+            border: 1px solid var(--neon); color: var(--neon);
+            padding: 8px 15px; border-radius: 6px; cursor: pointer;
+            font-weight: bold; font-size: 0.8rem; transition: 0.2s;
+        }
+        .custom-file-upload:hover { background: var(--neon); color: black; }
+        input[type=file] { display: none; }
+
+        button { 
+            border: none; border-radius: 6px; cursor: pointer; 
+            font-weight: bold; transition: 0.2s; font-size: 0.8rem; 
+            padding: 8px 15px;
+        }
+        .btn-danger { background: #cc3300; color: white; }
+        .btn-danger:hover { background: #aa2200; }
+        .btn-primary { background: var(--neon); color: black; }
+        .btn-primary:hover { background: #00cc77; }
+
+        .toolbar {
+            background: var(--header-bg);
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .tab-nav {
+            display: flex;
+            padding: 0 20px;
+            border-bottom: 1px solid #222;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            background: transparent; color: #888; padding: 12px 20px;
+            border-bottom: 2px solid transparent; margin-bottom: -1px;
+        }
+        .tab-btn:hover { color: white; }
+        .tab-btn.active { color: var(--neon); border-bottom-color: var(--neon); }
+
+        .tab-content {
+            display: none;
+            padding: 15px 20px;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 20px;
+            background: #0d0d0d;
+        }
+        .tab-content.active { display: flex; }
+
+        .tool-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            min-width: 120px;
+        }
+        .tool-group label { font-size: 0.7rem; color: #aaa; margin: 0; }
+        .tool-group input[type=range] { width: 100%; accent-color: var(--neon); margin: 0; }
+        
+        .btn-tool {
+            background: #2a2a2a; color: white; padding: 8px 12px; font-size: 0.75rem;
+        }
+        .btn-tool:hover { background: #444; }
+        .btn-tool.btn-warning { background: #ff9900; color: black; }
+        .btn-tool.btn-warning:hover { background: #e68a00; }
+        .btn-tool.btn-active { background: var(--neon); color: black; }
+
+        .viewer { 
+            position: relative; 
+            background: #050505; 
+            flex-grow: 1; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            overflow: hidden; 
+            background-image: linear-gradient(45deg, #0a0a0a 25%, transparent 25%), linear-gradient(-45deg, #0a0a0a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #0a0a0a 75%), linear-gradient(-45deg, transparent 75%, #0a0a0a 75%); 
+            background-size: 20px 20px; 
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px; 
+        }
+        #canvas-wrapper { position: relative; display: none; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        canvas { max-width: 100%; max-height: 100%; border-radius: 4px; display: block; }
+        #detections { position: absolute; top: 0; left: 0; pointer-events: none; }
+        #brush-canvas { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 90; }
+        #loupe { position: absolute; border: 3px solid var(--neon); border-radius: 50%; pointer-events: none; display: none; z-index: 100; box-shadow: 0 0 20px rgba(0,255,153,0.5); background: black; }
+        
+        .empty-state { color: #555; text-align: center; font-size: 1.2rem; background: rgba(0,0,0,0.5); padding: 40px; border-radius: 10px; }
+        .empty-state span { font-size: 3rem; display: block; margin-bottom: 10px; }
+
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); }
+        .modal-content { background: var(--panel); margin: 8% auto; padding: 20px; border: 1px solid var(--neon); border-radius: 10px; width: 80%; max-width: 600px; }
+        .close-btn { color: var(--neon); float: right; font-size: 24px; cursor: pointer; }
+        .modal-text { color: white; white-space: pre-wrap; font-family: monospace; background: #000; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; font-size: 12px;}
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--neon); }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🔬 CSI FORENSIC LAB PRO</h1>
+    <div class="header-actions">
+        <div id="status" style="font-size: 12px; font-family: monospace; color: var(--neon); margin-right: 10px;">⏳ Cargando...</div>
+        <label for="upload" class="custom-file-upload">📁 Cargar Imagen</label>
+        <input type="file" id="upload" accept="image/*">
+        <button id="btn-clear" class="btn-danger">🗑️ Quitar</button>
+        <button id="download" class="btn-primary">💾 Guardar</button>
+    </div>
+</header>
+
+<nav class="toolbar">
+    <div class="tab-nav">
+        <button class="tab-btn active" data-tab="adjust">🎨 Ajustes</button>
+        <button class="tab-btn" data-tab="forensic">🔍 Filtros Forenses</button>
+        <button class="tab-btn" data-tab="inpaint">✨ Borrador Mágico</button>
+        <button class="tab-btn" data-tab="ai">🧠 Inteligencia & OCR</button>
+        <button class="tab-btn" data-tab="view">🔬 Visor & Lupa</button>
+    </div>
+
+    <div class="tab-content active" id="tab-adjust">
+        <div class="tool-group"><label>Brillo</label><input type="range" id="brightness" min="-100" max="100" value="0"></div>
+        <div class="tool-group"><label>Contraste</label><input type="range" id="contrast" min="-100" max="100" value="0"></div>
+        <div class="tool-group"><label>Saturación</label><input type="range" id="saturate" min="-100" max="100" value="0"></div>
+        <div class="tool-group"><label>Grises</label><input type="range" id="grayscale" min="0" max="100" value="0"></div>
+        <div class="tool-group"><label>Tono</label><input type="range" id="hueRotate" min="0" max="360" value="0"></div>
+        <div class="tool-group"><label>Nitidez</label><input type="range" id="sharpness" min="0" max="100" value="0"></div>
+        <button id="reset" class="btn-tool">Restablecer</button>
+    </div>
+
+    <div class="tab-content" id="tab-forensic">
+        <button id="btn-thermal" class="btn-tool">🔥 Visión Térmica</button>
+        <button id="btn-night" class="btn-tool">🌙 Visión Nocturna</button>
+        <button id="btn-canny" class="btn-tool">📐 Canny Edge (OpenCV)</button>
+        <button id="btn-remove-bg" class="btn-tool btn-warning">✂️ Quitar Fondo (GrabCut)</button>
+    </div>
+
+    <div class="tab-content" id="tab-inpaint">
+        <p style="font-size: 0.8rem; color: #aaa; margin: 0;">Pinta sobre el objeto a eliminar y aplica el borrado mágico.</p>
+        <button id="btn-toggle-brush" class="btn-tool btn-warning">✏️ Activar Pincel</button>
+        <div class="tool-group"><label>Tamaño del Pincel</label><input type="range" id="brushSize" min="5" max="100" value="30"></div>
+        <button id="btn-apply-inpaint" class="btn-tool btn-primary">✨ Aplicar Borrado</button>
+        <button id="btn-clear-brush" class="btn-tool">🧹 Limpiar Pincel</button>
+    </div>
+
+    <div class="tab-content" id="tab-ai">
+        <button id="btn-detect" class="btn-tool">🤖 Detección Objetos (IA)</button>
+        <button id="btn-ocr" class="btn-tool">📝 Extraer Texto (OCR)</button>
+        <button id="btn-meta" class="btn-tool">📂 Ver Metadata EXIF</button>
+    </div>
+
+    <div class="tab-content" id="tab-view">
+        <button id="toggleLoupe" class="btn-tool btn-active">Lupa: ON/OFF</button>
+        <div class="tool-group"><label>Zoom Lupa</label><input type="range" id="lZoom" min="2" max="20" value="8"></div>
+        <div class="tool-group"><label>Tamaño Lupa</label><input type="range" id="lSize" min="200" max="600" value="300"></div>
+        <div class="tool-group">
+            <label>Histograma</label>
+            <canvas id="histogram" width="200" height="60" style="background: black; border-radius: 4px;"></canvas>
+        </div>
+    </div>
+</nav>
+
+<main class="viewer" id="viewer-area">
+    <div class="empty-state" id="empty-state">
+        <span>📁</span>
+        Selecciona una imagen para comenzar el análisis
+    </div>
+    <div id="canvas-wrapper">
+        <canvas id="canvas"></canvas>
+        <canvas id="brush-canvas"></canvas>
+        <canvas id="detections"></canvas>
+        <canvas id="loupe"></canvas>
+    </div>
+</main>
+
+<div id="ocr-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" id="close-ocr-modal">×</span>
+        <h2>📝 Texto Extraído (OCR)</h2>
+        <div id="ocr-result" class="modal-text">Procesando...</div>
+    </div>
+</div>
+
+<div id="meta-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" id="close-meta-modal">×</span>
+        <h2>📂 Metadata EXIF</h2>
+        <pre id="meta" class="modal-text">Sin metadata...</pre>
+    </div>
+</div>
+
+<script>
+(function() {
+    let model = null;
+    let originalImage = null;
+    let tempImageData = null;
+    let cvReady = false;
+    let loupeEnabled = true;
+
+    let brushActive = false;
+    let isDrawing = false;
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const dCanvas = document.getElementById("detections");
+    const dctx = dCanvas.getContext("2d");
+    const loupe = document.getElementById("loupe");
+    const lctx = loupe.getContext("2d");
+    const statusText = document.getElementById("status");
+    const emptyState = document.getElementById("empty-state");
+    const canvasWrapper = document.getElementById("canvas-wrapper");
+    
+    const ocrModal = document.getElementById("ocr-modal");
+    const ocrResult = document.getElementById("ocr-result");
+    const metaModal = document.getElementById("meta-modal");
+    const metaPre = document.getElementById("meta");
+
+    const brushCanvas = document.getElementById("brush-canvas");
+    const bctx = brushCanvas.getContext("2d");
+    const maskCanvas = document.createElement("canvas");
+    const mctx = maskCanvas.getContext("2d");
+
+    const controlIds = ["brightness", "contrast", "saturate", "grayscale", "hueRotate", "sharpness"];
+    const inputs = {};
+    controlIds.forEach(id => inputs[id] = document.getElementById(id));
+
+    // Pestañas
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        });
+    });
+
+    document.getElementById("close-ocr-modal").addEventListener("click", () => ocrModal.style.display = "none");
+    document.getElementById("close-meta-modal").addEventListener("click", () => metaModal.style.display = "none");
+
+    // ARREGLO: Carga independiente de OpenCV y IA para evitar bloqueos
+    function updateSystemStatus() {
+        if (cvReady && model) statusText.textContent = "✅ IA y OpenCV Online";
+        else if (cvReady) statusText.textContent = "✅ OpenCV Listo | ⏳ Cargando IA...";
+        else if (model) statusText.textContent = "✅ IA Lista | ⏳ Cargando OpenCV...";
+    }
+
+    function onOpenCvReady() {
+        cvReady = true;
+        updateSystemStatus();
+    }
+
+    async function initAI() {
+        try {
+            model = await cocoSsd.load();
+            updateSystemStatus();
+        } catch (e) { 
+            console.error("Error IA:", e);
+            statusText.textContent = "❌ Error al cargar IA"; 
+        }
+    }
+
+    if (typeof cv !== 'undefined') {
+        if (cv instanceof Promise) cv.then(onOpenCvReady);
+        else cv['onRuntimeInitialized'] = onOpenCvReady;
+    } else {
+        window.Module = { onRuntimeInitialized: onOpenCvReady };
+    }
+    initAI(); // Cargar IA inmediatamente
+
+    // Carga de Imagen
+    document.getElementById("upload").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const img = new Image();
+        img.onload = () => {
+            originalImage = img;
+            canvas.width = dCanvas.width = brushCanvas.width = maskCanvas.width = img.width;
+            canvas.height = dCanvas.height = brushCanvas.height = maskCanvas.height = img.height;
+            emptyState.style.display = 'none';
+            canvasWrapper.style.display = 'inline-block';
+            applyFilters();
+        };
+        img.src = URL.createObjectURL(file);
+    });
+
+    // Quitar Imagen
+    document.getElementById("btn-clear").addEventListener("click", () => {
+        originalImage = null;
+        tempImageData = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        bctx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
+        dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+        document.getElementById("upload").value = "";
+        canvasWrapper.style.display = 'none';
+        emptyState.style.display = 'block';
+        controlIds.forEach(id => inputs[id].value = 0);
+        const hCanvas = document.getElementById("histogram");
+        hCanvas.getContext("2d").clearRect(0, 0, hCanvas.width, hCanvas.height);
+        statusText.textContent = "🗑️ Imagen borrada. Listo.";
+    });
+
+    // Filtros
+    function applyFilters() {
+        if (!originalImage) return;
+        ctx.filter = `
+            brightness(${100 + parseInt(inputs.brightness.value)}%)
+            contrast(${100 + parseInt(inputs.contrast.value)}%)
+            saturate(${100 + parseInt(inputs.saturate.value)}%)
+            grayscale(${inputs.grayscale.value}%)
+            hue-rotate(${inputs.hueRotate.value}deg)
+        `;
+        ctx.drawImage(originalImage, 0, 0);
+        ctx.filter = "none";
+
+        let imageData = ctx.getImageData(0,0, canvas.width, canvas.height);
+        if (parseInt(inputs.sharpness.value) > 0) {
+            sharpen(imageData, parseInt(inputs.sharpness.value));
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        drawHistogram();
+        dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+    }
+
+    function sharpen(imageData, amount) {
+        const d = imageData.data;
+        const factor = amount / 20;
+        for (let i = 0; i < d.length; i += 4) {
+            d[i] = d[i] + factor * (d[i] - 128);
+            d[i+1] = d[i+1] + factor * (d[i+1] - 128);
+            d[i+2] = d[i+2] + factor * (d[i+2] - 128);
+        }
+    }
+
+    // Filtros Forenses
+    document.getElementById("btn-thermal").addEventListener("click", () => {
+        if (!tempImageData) return;
+        let d = new Uint8ClampedArray(tempImageData.data);
+        for (let i = 0; i < d.length; i += 4) {
+            let avg = (d[i] + d[i+1] + d[i+2]) / 3;
+            d[i] = avg > 128 ? 255 : avg * 2;
+            d[i+1] = avg;
+            d[i+2] = 255 - avg;
+        }
+        ctx.putImageData(new ImageData(d, canvas.width, canvas.height), 0, 0);
+        tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    });
+
+    document.getElementById("btn-night").addEventListener("click", () => {
+        if (!tempImageData) return;
+        let d = new Uint8ClampedArray(tempImageData.data);
+        for (let i = 0; i < d.length; i += 4) {
+            let g = d[i] * 0.3 + d[i+1] * 0.59 + d[i+2] * 0.11;
+            d[i] = 0; d[i+1] = g * 1.5; d[i+2] = 0;
+        }
+        ctx.putImageData(new ImageData(d, canvas.width, canvas.height), 0, 0);
+        tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    });
+
+    document.getElementById("btn-canny").addEventListener("click", () => {
+        if (!cvReady) return alert("OpenCV cargando...");
+        try {
+            let src = cv.imread(canvas);
+            let dst = new cv.Mat();
+            cv.cvtColor(src, src, cv.COLOR_RGBA2GRAY);
+            cv.Canny(src, dst, 50, 150);
+            cv.imshow(canvas, dst);
+            src.delete(); dst.delete();
+            tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        } catch (e) { console.error(e); }
+    });
+
+    // Quitar Fondo
+    document.getElementById("btn-remove-bg").addEventListener("click", () => {
+        if (!cvReady) return alert("OpenCV cargando...");
+        if (!originalImage) return;
+        statusText.textContent = "⏳ Procesando GrabCut...";
+        setTimeout(() => {
+            try {
+                let src = cv.imread(canvas);
+                let srcRGB = new cv.Mat();
+                cv.cvtColor(src, srcRGB, cv.COLOR_RGBA2RGB, 0);
+                let mask = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                let bgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
+                let fgdModel = new cv.Mat(1, 65, cv.CV_64FC1, new cv.Scalar(0));
+                
+                let marginX = Math.max(1, Math.floor(src.cols * 0.05));
+                let marginY = Math.max(1, Math.floor(src.rows * 0.05));
+                let rect = new cv.Rect(marginX, marginY, src.cols - 2 * marginX, src.rows - 2 * marginY);
+                
+                cv.grabCut(srcRGB, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT);
+                
+                let binMask = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                let binMaskData = binMask.data;
+                let maskData = mask.data;
+                let size = mask.rows * mask.cols;
+                for (let i = 0; i < size; i++) {
+                    binMaskData[i] = (maskData[i] === 1 || maskData[i] === 3) ? 255 : 0;
+                }
+                
+                let dst = new cv.Mat(src.rows, src.cols, src.type(), new cv.Scalar(0, 0, 0, 0));
+                src.copyTo(dst, binMask);
+                cv.imshow(canvas, dst);
+                
+                tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                drawHistogram();
+                statusText.textContent = "✅ Fondo removido";
+                
+                src.delete(); srcRGB.delete(); mask.delete(); bgdModel.delete(); fgdModel.delete(); binMask.delete(); dst.delete();
+            } catch (e) {
+                console.error(e);
+                statusText.textContent = "❌ Error GrabCut";
+            }
+        }, 100);
+    });
+
+    // Borrador Mágico
+    document.getElementById("btn-toggle-brush").addEventListener("click", (e) => {
+        brushActive = !brushActive;
+        if (brushActive) {
+            e.target.classList.add("btn-active");
+            e.target.textContent = "🚫 Desactivar Pincel";
+            canvas.style.cursor = "crosshair";
+            if (loupeEnabled) document.getElementById("toggleLoupe").click();
+        } else {
+            e.target.classList.remove("btn-active");
+            e.target.textContent = "✏️ Activar Pincel";
+            canvas.style.cursor = "default";
+        }
+    });
+
+    document.getElementById("btn-clear-brush").addEventListener("click", () => {
+        bctx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
+        mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+    });
+
+    function getMousePos(evt) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (evt.clientX - rect.left) * (canvas.width / rect.width),
+            y: (evt.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+
+    canvas.addEventListener("mousedown", (e) => {
+        if (!brushActive) return;
+        isDrawing = true;
+        drawBrush(e);
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+        if (!brushActive || !isDrawing) return;
+        drawBrush(e);
+    });
+
+    canvas.addEventListener("mouseup", () => isDrawing = false);
+    canvas.addEventListener("mouseleave", () => isDrawing = false);
+
+    function drawBrush(e) {
+        if (!isDrawing) return;
+        const pos = getMousePos(e);
+        const size = parseInt(document.getElementById("brushSize").value);
+        const halfSize = size / 2;
+
+        bctx.fillStyle = "rgba(255, 0, 0, 0.5)";
+        bctx.beginPath();
+        bctx.arc(pos.x, pos.y, halfSize, 0, Math.PI * 2);
+        bctx.fill();
+
+        mctx.fillStyle = "white";
+        mctx.beginPath();
+        mctx.arc(pos.x, pos.y, halfSize, 0, Math.PI * 2);
+        mctx.fill();
+    }
+
+    document.getElementById("btn-apply-inpaint").addEventListener("click", () => {
+        if (!cvReady) return alert("OpenCV cargando...");
+        if (!originalImage) return;
+        statusText.textContent = "⏳ Eliminando selección...";
+        setTimeout(() => {
+            try {
+                let src = cv.imread(canvas);
+                let srcRGB = new cv.Mat();
+                cv.cvtColor(src, srcRGB, cv.COLOR_RGBA2RGB);
+
+                let mask = cv.imread(maskCanvas);
+                let maskGray = new cv.Mat();
+                cv.cvtColor(mask, maskGray, cv.COLOR_RGBA2GRAY);
+                let binaryMask = new cv.Mat();
+                cv.threshold(maskGray, binaryMask, 10, 255, cv.THRESH_BINARY);
+
+                let dst = new cv.Mat();
+                cv.inpaint(srcRGB, binaryMask, dst, 3, cv.INPAINT_TELEA);
+
+                let dstRGBA = new cv.Mat();
+                cv.cvtColor(dst, dstRGBA, cv.COLOR_RGB2RGBA);
+
+                let rgbaPlanes = new cv.MatVector();
+                cv.split(src, rgbaPlanes);
+                let alpha = rgbaPlanes.get(3);
+                let dstPlanes = new cv.MatVector();
+                cv.split(dstRGBA, dstPlanes);
+                dstPlanes.set(3, alpha);
+                let finalDst = new cv.Mat();
+                cv.merge(dstPlanes, finalDst);
+
+                cv.imshow(canvas, finalDst);
+                tempImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                bctx.clearRect(0, 0, brushCanvas.width, brushCanvas.height);
+                mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+                drawHistogram();
+                statusText.textContent = "✅ Objeto eliminado";
+
+                src.delete(); srcRGB.delete(); mask.delete(); maskGray.delete(); 
+                binaryMask.delete(); dst.delete(); dstRGBA.delete(); 
+                rgbaPlanes.delete(); dstPlanes.delete(); finalDst.delete();
+            } catch (err) {
+                console.error(err);
+                statusText.textContent = "❌ Error Inpaint";
+            }
+        }, 100);
+    });
+
+    // Lupa
+    function handleLoupe(e) {
+        if (!loupeEnabled || !originalImage || brushActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+        const lSize = parseInt(document.getElementById("lSize").value);
+        const lZoom = parseInt(document.getElementById("lZoom").value);
+
+        loupe.width = loupe.height = lSize;
+        loupe.style.width = loupe.style.height = lSize + "px";
+        loupe.style.display = "block";
+        loupe.style.left = (e.clientX - rect.left - lSize / 2) + "px";
+        loupe.style.top = (e.clientY - rect.top - lSize / 2) + "px";
+
+        const viewArea = lSize / lZoom;
+        lctx.clearRect(0, 0, lSize, lSize);
+        lctx.save();
+        lctx.beginPath();
+        lctx.arc(lSize/2, lSize/2, lSize/2, 0, Math.PI*2);
+        lctx.clip();
+        lctx.drawImage(canvas, x - viewArea/2, y - viewArea/2, viewArea, viewArea, 0, 0, lSize, lSize);
+        lctx.restore();
+    }
+
+    // ==============================================
+    // SECCIÓN INTELIGENCIA & OCR (REPARADA)
+    // ==============================================
+
+    // 1. Detección de Objetos (IA)
+    document.getElementById("btn-detect").addEventListener("click", async () => {
+        if (!model) return alert("El modelo de IA aún se está cargando, espera un momento.");
+        if (!originalImage) return;
+        
+        statusText.textContent = "⏳ Analizando imagen con IA...";
+        try {
+            const predictions = await model.detect(canvas);
+            dctx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+            
+            if (predictions.length === 0) {
+                statusText.textContent = "✅ No se detectaron objetos conocidos.";
+                return;
+            }
+
+            predictions.forEach(p => {
+                dctx.strokeStyle = "#00ff99";
+                dctx.lineWidth = 4;
+                dctx.strokeRect(...p.bbox);
+                dctx.fillStyle = "#00ff99";
+                dctx.font = "bold 20px Arial";
+                const text = `${p.class.toUpperCase()} ${Math.round(p.score*100)}%`;
+                // Prevenir que el texto se salga de la pantalla si está muy arriba
+                dctx.fillText(text, p.bbox[0], p.bbox[1] > 20 ? p.bbox[1] - 5 : 20);
+            });
+            statusText.textContent = `✅ Análisis Completo (${predictions.length} objetos)`;
+        } catch (error) {
+            console.error("Error en detección:", error);
+            statusText.textContent = "❌ Error en IA";
+        }
+    });
+
+    // 2. OCR (Extraer Texto)
+    document.getElementById("btn-ocr").addEventListener("click", async () => {
+        if (!originalImage) return;
+        statusText.textContent = "⏳ Procesando OCR...";
+        ocrModal.style.display = "block";
+        ocrResult.textContent = "Iniciando motor de reconocimiento...";
+        
+        // ARREGLO CRÍTICO: Tesseract.js falla si el canvas tiene transparencia (fondo quitado).
+        // Se dibuja la imagen actual sobre un canvas temporal con fondo blanco sólido.
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.fillStyle = "white";
+        tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+        tempCtx.drawImage(canvas, 0, 0);
+
+        try {
+            const result = await Tesseract.recognize(tempCanvas, 'spa+eng', {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        ocrResult.textContent = `Reconociendo texto... ${Math.round(m.progress * 100)}%`;
+                        statusText.textContent = `⏳ OCR: ${Math.round(m.progress * 100)}%`;
+                    }
+                }
+            });
+            ocrResult.textContent = result.data.text || "No se detectó texto en la imagen.";
+            statusText.textContent = "✅ OCR Finalizado";
+        } catch (e) {
+            console.error("Error OCR:", e);
+            ocrResult.textContent = "Error durante el proceso de OCR.";
+            statusText.textContent = "❌ Error OCR";
+        }
+    });
+
+    // 3. Metadata EXIF
+    document.getElementById("btn-meta").addEventListener("click", () => {
+        const file = document.getElementById("upload").files[0];
+        if (!file) return;
+        
+        metaModal.style.display = "block";
+        metaPre.textContent = "Leyendo metadata...";
+
+        // ARREGLO: Usar el objeto 'file' directamente en la función getAllTags para evitar pérdida de contexto.
+        EXIF.getData(file, function() {
+            const data = EXIF.getAllTags(file);
+            metaPre.textContent = Object.keys(data).length ? JSON.stringify(data, null, 2) : "Esta imagen no contiene metadata EXIF.";
+        });
+    });
+
+    // ==============================================
+
+    function drawHistogram() {
+        const hCanvas = document.getElementById("histogram");
+        const hctx = hCanvas.getContext("2d");
+        const data = tempImageData.data;
+        let hist = new Array(256).fill(0);
+        for (let i = 0; i < data.length; i += 4) {
+            hist[Math.floor((data[i] + data[i+1] + data[i+2]) / 3)]++;
+        }
+        hctx.clearRect(0,0, hCanvas.width, hCanvas.height);
+        let max = Math.max(...hist);
+        hctx.fillStyle = "#00ff99";
+        hist.forEach((v, i) => {
+            let h = (v/max) * hCanvas.height;
+            hctx.fillRect(i * (hCanvas.width/256), hCanvas.height - h, 1, h);
+        });
+    }
+
+    // Listeners Globales
+    controlIds.forEach(id => inputs[id].addEventListener("input", applyFilters));
+    canvas.addEventListener("mousemove", handleLoupe);
+    canvas.addEventListener("mouseleave", () => loupe.style.display = "none");
+
+    document.getElementById("toggleLoupe").addEventListener("click", (e) => {
+        loupeEnabled = !loupeEnabled;
+        e.target.classList.toggle("btn-active");
+        if(!loupeEnabled) loupe.style.display = "none";
+    });
+
+    document.getElementById("reset").addEventListener("click", () => {
+        controlIds.forEach(id => inputs[id].value = 0);
+        applyFilters();
+    });
+
+    document.getElementById("download").addEventListener("click", () => {
+        if (!originalImage) return;
+        const link = document.createElement('a');
+        link.download = 'Evidencia_Forense.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    });
+
+})();
+</script>
+
+</body>
+</html>
